@@ -3,6 +3,7 @@ using System.Text;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using System.Collections.Generic;
 
 using UnityEngine;
 
@@ -16,15 +17,15 @@ public class TwitchUDPLinker : MonoBehaviour
   Thread receiveThread;
   UdpClient client;
 
-  static System.Collections.Generic.Queue<string> msgQ;
+  static Queue<string> msgQ;
 
   // start from unity3d
   public void Start()
   {
     Debug.Log("Starting Listener");
 
-    msgQ = new System.Collections.Generic.Queue<string>();
-    
+    msgQ = new Queue<string>();
+
     receiveThread = new Thread(new ThreadStart(ReceiveData));
     receiveThread.IsBackground = true;
     receiveThread.Start();
@@ -38,11 +39,39 @@ public class TwitchUDPLinker : MonoBehaviour
 
   public void Update()
   {
+    List<string> newChatMsgs = new List<string>();
+
+    // Lock and fetch msgs
     lock (msgQ)
     {
       while (msgQ.Count > 0)
       {
-        Debug.Log(msgQ.Dequeue());
+        newChatMsgs.Add(msgQ.Dequeue());
+      }
+    }
+
+    // Process Messages
+    foreach (string line in newChatMsgs)
+    {
+      string content = line;
+
+      if (content[0] == '[')
+      {
+        // Read Tag
+        int endTag = content.IndexOf(']');
+        string tag = content.Substring(1, endTag - 2);
+        content = content.Substring(endTag + 1);
+
+        Debug.Log("Tag: " + tag + " Content: " + content);
+      }
+      else if (content[0] == '{')
+      {
+        TwitchMsg msg = TwitchMsg.CreateFromJSON(content);
+        Debug.Log(msg);
+      }
+      else
+      {
+        Debug.Log(line);
       }
     }
   }
@@ -74,7 +103,7 @@ public class TwitchUDPLinker : MonoBehaviour
       {
         byte[] data = client.Receive(ref endPoint);
         string text = Encoding.UTF8.GetString(data);
-        
+
         lock (msgQ)
         {
           msgQ.Enqueue(text);
@@ -84,7 +113,7 @@ public class TwitchUDPLinker : MonoBehaviour
       {
         print(err.ToString());
       }
-   
+
     }
   }
 }
