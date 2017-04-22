@@ -54,7 +54,7 @@ Shader "Unlit/PlayerShader"
 			
 			fixed4 frag (v2f i) : SV_Target
 			{
-				fixed4 col = _Color * i.colMod.x;
+				fixed4 col = lerp(fixed4(1,1,1,1), _Color, i.colMod.x * 0.8);
 				return col;
 			}
 			ENDCG

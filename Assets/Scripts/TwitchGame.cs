@@ -31,13 +31,13 @@ public class TwitchGame : MonoBehaviour
   // Update is called once per frame
   void Update()
   {
-    float dt = Time.deltaTime* gameSpeed;
+    float dt = Time.deltaTime * gameSpeed;
 
     // Move Players
     for (int i = 0; i < currPlayerCount; ++i)
     {
       var p = m_players[i];
-      if(p == null)
+      if (p == null)
       {
         Debug.LogError("Player " + i + "is null");
         continue;
@@ -48,20 +48,22 @@ public class TwitchGame : MonoBehaviour
       {
         p.travelDir = p.tarPos - p.mapPos;
 
-        if (p.travelDir.sqrMagnitude < 0.8) {
+        if (p.travelDir.sqrMagnitude < 0.8)
+        {
           Debug.Log("Reached Target " + p.tarPos);
           p.travelDir = Vector2.zero;
           p.tarPos.x = -1;
-          if((p.doingWhat == PlayerDoing.Walking) || (p.doingWhat == PlayerDoing.Running))
+          if ((p.doingWhat == PlayerDoing.Walking) || (p.doingWhat == PlayerDoing.Running))
           {
             p.doingWhat = PlayerDoing.Standing;
           }
-        } else
+        }
+        else
         {
           p.travelDir.Normalize();
         }
       }
-      
+
       // Diffrent Actions
       switch (p.doingWhat)
       {
@@ -97,19 +99,59 @@ public class TwitchGame : MonoBehaviour
     }
   }
 
+  List<TwitchMsg> fakePlayers = new List<TwitchMsg>();
+  List<string> fakemsgs = new List<string>();
+  string newfakenick = "nickme";
+  void OnGUI()
+  {
+    // Make a background box
+    int y = 400;
+    GUI.Box(new Rect(10, y, 100, 110), "Fake Message"); y += 25;
+    newfakenick = GUI.TextField(new Rect(10, y, 100, 20), newfakenick); y += 25;
+    if (GUI.Button(new Rect(20, y, 80, 20), "Add"))
+    {
+      TwitchMsg msg = new TwitchMsg();
+      msg.cat = 35;
+      msg.body = "!join";
+      msg.msg = new TwitchSubMsg();
+      msg.msg.userid = "_" + newfakenick;
+      msg.msg.nick = newfakenick;
+      msg.msg.content = "!join";
+      fakePlayers.Add(msg);
+
+      handleMsg(msg);
+
+      newfakenick += "1";
+    }
+
+    int x = 120;
+    foreach (var p in fakePlayers)
+    {
+      y = 480;
+      p.msg.content = GUI.TextField(new Rect(x, y, 100, 20), p.msg.content); y += 25;
+      if (GUI.Button(new Rect(x+10, y, 80, 20), "Submit"))
+      {
+        handleMsg(p);
+      }
+
+      x += 110;
+    }
+  }
+
   private float stepMovePlayer(GamePlayer p, float travelDist)
   {
     TileData mt = gameMap.GetMapTile(p.mapPos);
     Vector2 relDir = p.travelDir * travelDist * mt.type.moveMult;
 
     float travelPointsRemain = 0.0f;
-    if (relDir.sqrMagnitude > 1) {
+    if (relDir.sqrMagnitude > 1)
+    {
       relDir = p.travelDir;
       travelPointsRemain = (travelDist * mt.type.moveMult - 1.0f) / mt.type.moveMult;
     }
 
     Vector2 np = p.mapPos + relDir;
-    if(gameMap.GetMapTile(np).type.moveMult > 0)
+    if (gameMap.GetMapTile(np).type.moveMult > 0)
     {
       p.mapPos = np;
     }
@@ -138,17 +180,21 @@ public class TwitchGame : MonoBehaviour
       return;
     }
 
+    // Not a command
+    if (msg.msg.content.Contains("!") == false)
+    {
+      return;
+    }
+
     var p = GetPlayer(msg.msg.userid);
     if (p == null)
     {
       // Not in game
       if (msg.msg.content.Contains("!join"))
-      {
         PlayerJoin(msg.msg.userid, msg.msg.nick);
-      } else if (msg.msg.content.Contains("!"))
-      {
-        TwitchUDPLinker.Say("Please enter ❕join to play");
-      }
+      else
+        TwitchUDPLinker.Say("Please ❕join to play");
+
     }
     else
     {
@@ -161,7 +207,7 @@ public class TwitchGame : MonoBehaviour
       {
         PlayerGoto(p, msg.msg.content);
       }
-       else if (msg.msg.content.Contains("!move"))  // Movement Command
+      else if (msg.msg.content.Contains("!move"))  // Movement Command
       {
         PlayerMove(p, msg.msg.content);
       }
@@ -183,6 +229,11 @@ public class TwitchGame : MonoBehaviour
       {
         PlayerStop(p);
       }
+      //
+      else
+      {
+        TwitchUDPLinker.Say("Commands ❕: goto, move, walk, run, attack, stop");
+      }
     }
 
   }
@@ -192,7 +243,7 @@ public class TwitchGame : MonoBehaviour
     var marker = Instantiate(markerPrefab, transform);
     marker.transform.localPosition = new Vector3(pos.x, 0, pos.y);
     var kae = marker.GetComponent<KillAnimEnd>();
-      kae.SetColour(col);
+    kae.SetColour(col);
   }
 
 
@@ -200,7 +251,7 @@ public class TwitchGame : MonoBehaviour
   // Player Functions
   void PlayerJoin(string id, string nick)
   {
-    GamePlayer gp = new GamePlayer();
+    GamePlayer gp = ScriptableObject.CreateInstance<GamePlayer>();
     gp.nick = nick;
     gp.userid = id;
     gp.col = Random.ColorHSV(0, 1, 0.5f, 1, 0.5f, 1);
@@ -251,8 +302,8 @@ public class TwitchGame : MonoBehaviour
 
     int x = int.Parse(m.Groups[1].Value);
     int y = int.Parse(m.Groups[2].Value);
-    x = Mathf.Clamp(x, 0, gameMap.width-1);
-    y = Mathf.Clamp(y, 0, gameMap.height-1);
+    x = Mathf.Clamp(x, 0, gameMap.width - 1);
+    y = Mathf.Clamp(y, 0, gameMap.height - 1);
 
     p.tarPos = new Vector2(x, y);
     MarkerAt(p.tarPos, p.col);

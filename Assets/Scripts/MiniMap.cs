@@ -51,7 +51,7 @@ public class MiniMap : MonoBehaviour
     {
       for (int y = 0; y < height; ++y)
       {
-        var pos = targetPlayer.mapPos + new Vector2(x - width * 0.5f, y - height * 0.5f);
+        var pos = targetPos + new Vector2(x - width * 0.5f, y - height * 0.5f);
         var tile = mapRef.GetMapTile(pos);
 
         if (targetTile == tile)

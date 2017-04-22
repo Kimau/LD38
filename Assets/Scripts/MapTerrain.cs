@@ -27,7 +27,7 @@ public class MapTerrain : MonoBehaviour
 
     m_colBuffer = new Color32[width * height];
     m_surfaceTex = new Texture2D(width, height, TextureFormat.ARGB32, false);
-    Debug.Log(m_surfaceTex.width + ":" + m_surfaceTex.height);
+    
     m_tiles = new TileData[width * height];
     m_surfaceTex.filterMode = FilterMode.Point;
 
