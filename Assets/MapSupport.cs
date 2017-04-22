@@ -1,0 +1,33 @@
+﻿using UnityEngine;
+
+[System.Serializable]
+public class MapTile
+{
+  public Color32 color;
+  public string name;
+  public int moveVal;
+
+}
+
+[System.Serializable]
+public enum PlayerDoing {
+  Dead,
+  Cover,
+  Standing,
+  Walking,
+  Running
+};
+
+[System.Serializable]
+public class GamePlayer
+{
+  public string userid;
+  public string nick;
+  public Color32 col;
+
+  public string target;
+
+  public PlayerDoing doingWhat;
+  public Vector2 mapPos;
+  public Vector2 travelDir;
+}

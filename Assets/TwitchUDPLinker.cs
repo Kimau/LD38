@@ -9,9 +9,9 @@ using UnityEngine;
 
 public class TwitchUDPLinker : MonoBehaviour
 {
-
   public int remotePort;
   public int listenPort;
+  public TwitchGame myGame;
 
   // receiving Thread
   Thread receiveThread;
@@ -59,7 +59,7 @@ public class TwitchUDPLinker : MonoBehaviour
       {
         // Read Tag
         int endTag = content.IndexOf(']');
-        string tag = content.Substring(1, endTag - 2);
+        string tag = content.Substring(1, endTag - 1);
         content = content.Substring(endTag + 1);
 
         Debug.Log("Tag: " + tag + " Content: " + content);
@@ -67,7 +67,7 @@ public class TwitchUDPLinker : MonoBehaviour
       else if (content[0] == '{')
       {
         TwitchMsg msg = TwitchMsg.CreateFromJSON(content);
-        Debug.Log(msg);
+        myGame.handleMsg(msg);
       }
       else
       {
