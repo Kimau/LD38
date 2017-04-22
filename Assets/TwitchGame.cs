@@ -6,6 +6,7 @@ using UnityEngine;
 public class TwitchGame : MonoBehaviour
 {
   public GameObject templatePlayer;
+  public MiniMap miniMap;
   public MapTerrain gameMap;
   const int maxPlayerCount = 256;
 
@@ -73,44 +74,10 @@ public class TwitchGame : MonoBehaviour
       travelPointsRemain = (travelDist * mt.type.moveMult - 1.0f) / mt.type.moveMult;
     }
 
-    // Move in main direction first
-    if (Mathf.Abs(relDir.x) > Mathf.Abs(relDir.y))
+    Vector2 np = p.mapPos + relDir;
+    if(gameMap.GetMapTile(np).type.moveMult > 0)
     {
-      // Do X first
-      if (((relDir.x < 0) && (mt.moveLeft || (0 < (relDir.x + Mathf.Repeat(p.mapPos.x, 1.0f))))) ||
-           (mt.moveRight || (1 > (relDir.x + Mathf.Repeat(p.mapPos.x, 1.0f))))
-           )
-      {
-        p.mapPos.x += relDir.x;
-      }
-
-      // Update Tile to be safe
-      mt = gameMap.GetMapTile(p.mapPos);
-      if (((relDir.y < 0) && (mt.moveDown || (0 < (relDir.y + Mathf.Repeat(p.mapPos.y, 1.0f))))) ||
-           (mt.moveUp || (1 > (relDir.y + Mathf.Repeat(p.mapPos.y, 1.0f))))
-           )
-      {
-        p.mapPos.y += relDir.y;
-      }
-    }
-    else
-    {
-      // Do Y first
-      if (((relDir.y < 0) && (mt.moveDown || (0 < (relDir.y + Mathf.Repeat(p.mapPos.y, 1.0f))))) ||
-           (mt.moveUp || (1 > (relDir.y + Mathf.Repeat(p.mapPos.y, 1.0f))))
-           )
-      {
-        p.mapPos.y += relDir.y;
-      }
-
-      // Update Tile to be safe
-      mt = gameMap.GetMapTile(p.mapPos);
-      if (((relDir.x < 0) && (mt.moveLeft || (0 < (relDir.x + Mathf.Repeat(p.mapPos.x, 1.0f))))) ||
-             (mt.moveRight || (1 > (relDir.x + Mathf.Repeat(p.mapPos.x, 1.0f))))
-             )
-      {
-        p.mapPos.x += relDir.x;
-      }
+      p.mapPos = np;
     }
 
     return travelPointsRemain;
@@ -148,9 +115,9 @@ public class TwitchGame : MonoBehaviour
     }
     else
     {
+      miniMap.targetPlayer = p;
+
       // Do Stuff for Player
-
-
       if (msg.msg.content.Contains("!move"))  // Movement Command
       {
         PlayerMove(p, msg.msg.content);
@@ -179,6 +146,7 @@ public class TwitchGame : MonoBehaviour
     newPlayer.GetComponent<PlayerGO>().SetPlayerData(ref gp);
 
     m_players[currPlayerCount++] = gp;
+    miniMap.targetPlayer = gp;
   }
 
   void PlayerMove(GamePlayer p, string msgCmd)

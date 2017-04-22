@@ -37,8 +37,8 @@ public class MapTerrain : MonoBehaviour
 
   public TileData GetMapTile(Vector2 pos)
   {
-    int xi = Mathf.FloorToInt(Mathf.Clamp(pos.x, 0, width-0.2f));
-    int yi = Mathf.FloorToInt(Mathf.Clamp(pos.y, 0, height-0.2f));
+    int xi = Mathf.FloorToInt(Mathf.Clamp(pos.x, 0, width - 0.2f));
+    int yi = Mathf.FloorToInt(Mathf.Clamp(pos.y, 0, height - 0.2f));
 
     return m_tiles[xi + yi * width];
   }
@@ -48,7 +48,7 @@ public class MapTerrain : MonoBehaviour
     int res = -1;
     int closeDist = 1000000;
 
-    for (int i =0; i < m_tileData.Length; i++)
+    for (int i = 0; i < m_tileData.Length; i++)
     {
       Color32 p = m_tileData[i].color;
       int dif =
@@ -56,7 +56,7 @@ public class MapTerrain : MonoBehaviour
               (col.g - p.g) * (col.g - p.g) +
               (col.b - p.b) * (col.b - p.b);
 
-      if(dif < closeDist)
+      if (dif < closeDist)
       {
         closeDist = dif;
         res = i;
@@ -72,16 +72,18 @@ public class MapTerrain : MonoBehaviour
     {
       float invWidth = 1.0f / (float)(width);
       float invHeight = 1.0f / (float)(height);
-      
+
+      Color[] srcPixelData = m_sourcMap.GetPixels();
 
       for (int x = 0; x < width; x++)
       {
         for (int y = 0; y < height; y++)
         {
           // EXTREMELY STUPID WAY TODO THIS BUT JAM AND HACKABLE
-          Color32 p = m_sourcMap.GetPixel(
-            Mathf.FloorToInt((x * invWidth) * m_sourcMap.width),
-            Mathf.FloorToInt((y * invHeight) * m_sourcMap.height));
+          Color32 p = srcPixelData[
+            Mathf.FloorToInt((x * invWidth) * m_sourcMap.width) +
+            Mathf.FloorToInt((y * invHeight) * m_sourcMap.height) * width
+            ];
 
           int mapID = NearestMapTile(p);
 
@@ -91,7 +93,8 @@ public class MapTerrain : MonoBehaviour
           m_colBuffer[x + y * width] = td.type.color;
         }
       }
-    } else
+    }
+    else
     {
       // Wonky Colour Test
       for (int x = 0; x < width; x++)
@@ -114,31 +117,32 @@ public class MapTerrain : MonoBehaviour
       for (int y = 0; y < height; y++)
       {
         TileData td = m_tiles[x + y * width];
-        td.moveUp = ((y + 1) < width) && (m_tiles[x + (y+1) * width].type.moveMult > 0);
-        td.moveDown = (y > 0) && (m_tiles[x + (y-1) * width].type.moveMult > 0);
+        td.moveUp = ((y + 1) < width) && (m_tiles[x + (y + 1) * width].type.moveMult > 0);
+        td.moveDown = (y > 0) && (m_tiles[x + (y - 1) * width].type.moveMult > 0);
         td.moveLeft = (x > 0) && (m_tiles[(x - 1) + y * width].type.moveMult > 0);
         td.moveRight = ((x + 1) < width) && (m_tiles[(x + 1) + y * width].type.moveMult > 0);
       }
     }
 
-        m_surfaceTex.SetPixels32(m_colBuffer);
+    m_surfaceTex.SetPixels32(m_colBuffer);
     m_surfaceTex.Apply(false);
   }
 
   public Vector2 GetRandomMapSpawn()
   {
-    for(int stoplock = 0; stoplock < 100; ++stoplock) {
+    for (int stoplock = 0; stoplock < 100; ++stoplock)
+    {
       Vector2 p = new Vector2(Random.value * width, Random.value * height);
 
       int i = 0;
       var mt = GetMapTile(p);
-      while((i < 100) && mt.type.moveMult < 0.4)
+      while ((i < 100) && mt.type.moveMult < 0.4)
       {
         // Move Inland
         Vector2 np = new Vector2(
           (p.x - width * 0.5f) * 0.9f + width * 0.5f,
          (p.y - height * 0.5f) * 0.9f + height * 0.5f);
-        
+
         Debug.DrawLine(new Vector3(p.x, 1.0f, p.y), new Vector3(np.x, 1.0f, np.y));
 
         p = np;
@@ -146,7 +150,8 @@ public class MapTerrain : MonoBehaviour
         i++;
       }
 
-      if(mt.type.moveMult < 0.4) {
+      if (mt.type.moveMult < 0.4)
+      {
         return p;
       }
 
