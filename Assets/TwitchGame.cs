@@ -10,6 +10,10 @@ public class TwitchGame : MonoBehaviour
   public MapTerrain gameMap;
   const int maxPlayerCount = 256;
 
+  public int walkSpeed = 5;
+  public int runSpeed = 15;
+  public float gameSpeed = 1.0f;
+
   int currPlayerCount = 0;
   GamePlayer[] m_players;
 
@@ -17,6 +21,7 @@ public class TwitchGame : MonoBehaviour
   void Start()
   {
     m_players = new GamePlayer[maxPlayerCount];
+    Application.runInBackground = true;
 
     // New Game Logic
     currPlayerCount = 0;
@@ -25,6 +30,8 @@ public class TwitchGame : MonoBehaviour
   // Update is called once per frame
   void Update()
   {
+    float dt = Time.deltaTime* gameSpeed;
+
     // Move Players
     for (int i = 0; i < currPlayerCount; ++i)
     {
@@ -34,8 +41,27 @@ public class TwitchGame : MonoBehaviour
         Debug.LogError("Player " + i + "is null");
         continue;
       }
-      
 
+      // Aim at point
+      if (p.tarPos.x > 0)
+      {
+        p.travelDir = p.tarPos - p.mapPos;
+
+        if (p.travelDir.sqrMagnitude < 0.8) {
+          Debug.Log("Reached Target " + p.tarPos);
+          p.travelDir = Vector2.zero;
+          p.tarPos.x = -1;
+          if((p.doingWhat == PlayerDoing.Walking) || (p.doingWhat == PlayerDoing.Running))
+          {
+            p.doingWhat = PlayerDoing.Standing;
+          }
+        } else
+        {
+          p.travelDir.Normalize();
+        }
+      }
+      
+      // Diffrent Actions
       switch (p.doingWhat)
       {
         case PlayerDoing.Dead:
@@ -48,16 +74,23 @@ public class TwitchGame : MonoBehaviour
           break;
 
         case PlayerDoing.Walking:
-
-          float travelDist = Time.deltaTime * 100;
-          for (float f = 0; f < travelDist; f += 1.0f)
           {
-            travelDist = stepMovePlayer(p, travelDist);
+            float travelDist = dt * walkSpeed;
+            for (float f = 0; f < travelDist; f += 1.0f)
+            {
+              travelDist = stepMovePlayer(p, travelDist);
+            }
           }
           break;
 
         case PlayerDoing.Running:
-
+          {
+            float travelDist = dt * runSpeed;
+            for (float f = 0; f < travelDist; f += 1.0f)
+            {
+              travelDist = stepMovePlayer(p, travelDist);
+            }
+          }
           break;
       }
     }
@@ -118,9 +151,21 @@ public class TwitchGame : MonoBehaviour
       miniMap.targetPlayer = p;
 
       // Do Stuff for Player
-      if (msg.msg.content.Contains("!move"))  // Movement Command
+      if (msg.msg.content.Contains("!goto"))  // Movement Command
+      {
+        PlayerGoto(p, msg.msg.content);
+      }
+       else if (msg.msg.content.Contains("!move"))  // Movement Command
       {
         PlayerMove(p, msg.msg.content);
+      }
+      else if (msg.msg.content.Contains("!walk"))  // Movement Command
+      {
+        p.doingWhat = PlayerDoing.Walking;
+      }
+      else if (msg.msg.content.Contains("!run"))  // Movement Command
+      {
+        p.doingWhat = PlayerDoing.Running;
       }
       else if (msg.msg.content.Contains("!stop")) // Stop Commmand
       {
@@ -141,6 +186,7 @@ public class TwitchGame : MonoBehaviour
     gp.col = Random.ColorHSV(0, 1, 0.5f, 1, 0.5f, 1);
     gp.doingWhat = PlayerDoing.Standing;
     gp.mapPos = gameMap.GetRandomMapSpawn();
+    gp.tarPos.x = -1.0f;
 
     var newPlayer = Instantiate(templatePlayer, transform);
     newPlayer.GetComponent<PlayerGO>().SetPlayerData(ref gp);
@@ -166,6 +212,29 @@ public class TwitchGame : MonoBehaviour
     float rad = (deg * Mathf.PI / 180.0f);
 
     p.travelDir = new Vector2(Mathf.Sin(rad), Mathf.Cos(rad));
+  }
+
+
+  void PlayerGoto(GamePlayer p, string msgCmd)
+  {
+    p.doingWhat = PlayerDoing.Walking;
+
+    msgCmd = msgCmd.ToLower();
+
+    var m = Regex.Match(msgCmd, "!goto ([0-9]*) ([0-9]*)");
+    if (!m.Success)
+    {
+      Debug.Log("Move Command Failed: " + msgCmd);
+      return;
+    }
+
+    int x = int.Parse(m.Groups[1].Value);
+    int y = int.Parse(m.Groups[2].Value);
+    x = Mathf.Clamp(x, 0, gameMap.width-1);
+    y = Mathf.Clamp(y, 0, gameMap.height-1);
+
+    p.tarPos = new Vector2(x, y);
+    Debug.Log(p.tarPos);
   }
 
   void PlayerStop(GamePlayer p)

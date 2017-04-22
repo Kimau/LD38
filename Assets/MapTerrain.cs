@@ -143,14 +143,14 @@ public class MapTerrain : MonoBehaviour
           (p.x - width * 0.5f) * 0.9f + width * 0.5f,
          (p.y - height * 0.5f) * 0.9f + height * 0.5f);
 
-        Debug.DrawLine(new Vector3(p.x, 1.0f, p.y), new Vector3(np.x, 1.0f, np.y));
+        // Debug.Log("Attempting Spawn:" + np);
 
         p = np;
         mt = GetMapTile(p);
         i++;
       }
 
-      if (mt.type.moveMult < 0.4)
+      if (mt.type.moveMult > 0.4)
       {
         return p;
       }

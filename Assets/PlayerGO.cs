@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using UnityEngine;
 
 
-[RequireComponent(typeof(Renderer))]
-[RequireComponent(typeof(MeshFilter))]
 public class PlayerGO : MonoBehaviour {
 
   GamePlayer playerData;
@@ -18,7 +16,7 @@ public class PlayerGO : MonoBehaviour {
   // Use this for initialization
   void Start()
   {
-    m_renderer = GetComponent<Renderer>();
+    m_renderer = GetComponentInChildren<Renderer>();
   }
 	
 	// Update is called once per frame
@@ -32,6 +30,11 @@ public class PlayerGO : MonoBehaviour {
     transform.localPosition = new Vector3(
       playerData.mapPos.x,0,
       playerData.mapPos.y);
+
+
+    float dir = Mathf.PI * 0.5f - Mathf.Atan2(playerData.travelDir.y, playerData.travelDir.x);
+
+    transform.localRotation = Quaternion.Euler(0, Mathf.Rad2Deg * dir, 0);
 
     transform.localScale = Vector3.one * 10.0f;
 
@@ -47,7 +50,7 @@ public class PlayerGO : MonoBehaviour {
     matBlock.SetColor("_Color", playerData.col);
 
     // Set Colour
-    m_renderer = GetComponent<Renderer>();
+    m_renderer = GetComponentInChildren<Renderer>();
     m_renderer.SetPropertyBlock(matBlock);
   }
 }

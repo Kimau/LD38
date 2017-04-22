@@ -34,6 +34,7 @@ public class GamePlayer
   public string nick;
   public Color32 col;
 
+  public Vector2 tarPos;
   public string target;
 
   public PlayerDoing doingWhat;
