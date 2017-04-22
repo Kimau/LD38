@@ -155,6 +155,8 @@ public class TwitchGame : MonoBehaviour
       miniMap.targetPlayer = p;
 
       // Do Stuff for Player
+
+      // --------------- MOVEMENT -----------------------
       if (msg.msg.content.Contains("!goto"))  // Movement Command
       {
         PlayerGoto(p, msg.msg.content);
@@ -171,6 +173,12 @@ public class TwitchGame : MonoBehaviour
       {
         p.doingWhat = PlayerDoing.Running;
       }
+      // --------------- ATTACK-----------------------
+      else if (msg.msg.content.Contains("!attack"))  // Movement Command
+      {
+        PlayerAttack(p, msg.msg.content);
+      }
+      // 
       else if (msg.msg.content.Contains("!stop")) // Stop Commmand
       {
         PlayerStop(p);
@@ -248,6 +256,12 @@ public class TwitchGame : MonoBehaviour
 
     p.tarPos = new Vector2(x, y);
     MarkerAt(p.tarPos, p.col);
+  }
+
+  void PlayerAttack(GamePlayer p, string msgCmd)
+  {
+    msgCmd = msgCmd.ToLower();
+
   }
 
   void PlayerStop(GamePlayer p)

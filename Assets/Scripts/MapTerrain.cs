@@ -27,6 +27,7 @@ public class MapTerrain : MonoBehaviour
 
     m_colBuffer = new Color32[width * height];
     m_surfaceTex = new Texture2D(width, height, TextureFormat.ARGB32, false);
+    Debug.Log(m_surfaceTex.width + ":" + m_surfaceTex.height);
     m_tiles = new TileData[width * height];
     m_surfaceTex.filterMode = FilterMode.Point;
 
@@ -91,8 +92,15 @@ public class MapTerrain : MonoBehaviour
           td.type = m_tileData[mapID];
           m_tiles[x + y * width] = td;
           m_colBuffer[x + y * width] = td.type.color;
+
+          if (((x % 64) == 0) || ((y % 64) == 0) || (x+1 == width) || (y+1 == height))
+          {
+            m_colBuffer[x + y * width] = new Color32((byte)~td.type.color.r, (byte)~td.type.color.g, (byte)~td.type.color.b, td.type.color.a);
+          }
         }
       }
+
+
     }
     else
     {
@@ -108,19 +116,6 @@ public class MapTerrain : MonoBehaviour
           m_tiles[x + y * width] = td;
           m_colBuffer[x + y * width] = td.type.color;
         }
-      }
-    }
-
-    // Do Map Checks
-    for (int x = 0; x < width; x++)
-    {
-      for (int y = 0; y < height; y++)
-      {
-        TileData td = m_tiles[x + y * width];
-        td.moveUp = ((y + 1) < width) && (m_tiles[x + (y + 1) * width].type.moveMult > 0);
-        td.moveDown = (y > 0) && (m_tiles[x + (y - 1) * width].type.moveMult > 0);
-        td.moveLeft = (x > 0) && (m_tiles[(x - 1) + y * width].type.moveMult > 0);
-        td.moveRight = ((x + 1) < width) && (m_tiles[(x + 1) + y * width].type.moveMult > 0);
       }
     }
 
