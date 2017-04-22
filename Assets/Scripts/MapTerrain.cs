@@ -81,10 +81,9 @@ public class MapTerrain : MonoBehaviour
         for (int y = 0; y < height; y++)
         {
           // EXTREMELY STUPID WAY TODO THIS BUT JAM AND HACKABLE
-          Color32 p = srcPixelData[
-            Mathf.FloorToInt((x * invWidth) * m_sourcMap.width) +
-            Mathf.FloorToInt((y * invHeight) * m_sourcMap.height) * width
-            ];
+          int sx = Mathf.FloorToInt((x * invWidth) * m_sourcMap.width);
+          int sy = Mathf.FloorToInt((y * invHeight) * m_sourcMap.height);
+          Color32 p = srcPixelData[ sx + sy * m_sourcMap.width];
 
           int mapID = NearestMapTile(p);
 
@@ -92,11 +91,6 @@ public class MapTerrain : MonoBehaviour
           td.type = m_tileData[mapID];
           m_tiles[x + y * width] = td;
           m_colBuffer[x + y * width] = td.type.color;
-
-          if (((x % 64) == 0) || ((y % 64) == 0) || (x+1 == width) || (y+1 == height))
-          {
-            m_colBuffer[x + y * width] = new Color32((byte)~td.type.color.r, (byte)~td.type.color.g, (byte)~td.type.color.b, td.type.color.a);
-          }
         }
       }
 

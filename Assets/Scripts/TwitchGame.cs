@@ -8,6 +8,8 @@ public class TwitchGame : MonoBehaviour
   public GameObject templatePlayer;
   public MiniMap miniMap;
   public KillAnimEnd markerPrefab;
+  public KillAnimEnd ping;
+  public KillAnimEnd ping3;
   public MapTerrain gameMap;
   const int maxPlayerCount = 256;
 
@@ -23,6 +25,8 @@ public class TwitchGame : MonoBehaviour
   {
     m_players = new GamePlayer[maxPlayerCount];
     Application.runInBackground = true;
+
+    transform.localScale = new Vector3(20.0f / gameMap.width, 20.0f / gameMap.width, 20.0f / gameMap.width);
 
     // New Game Logic
     currPlayerCount = 0;
@@ -246,6 +250,18 @@ public class TwitchGame : MonoBehaviour
     kae.SetColour(col);
   }
 
+  void PingAt(Vector2 pos)
+  {
+    var p = Instantiate(ping, transform);
+    p.transform.localPosition = new Vector3(pos.x, 0, pos.y);
+  }
+
+  void PingBigAt(Vector2 pos)
+  {
+    var p = Instantiate(ping3, transform);
+    p.transform.localPosition = new Vector3(pos.x, 0, pos.y);
+  }
+
 
   //---------------------------------------------------------------------------------
   // Player Functions
@@ -261,6 +277,8 @@ public class TwitchGame : MonoBehaviour
 
     var newPlayer = Instantiate(templatePlayer, transform);
     newPlayer.GetComponent<PlayerGO>().SetPlayerData(ref gp);
+
+    PingAt(gp.mapPos);
 
     m_players[currPlayerCount++] = gp;
     miniMap.targetPlayer = gp;
