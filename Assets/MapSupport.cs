@@ -1,12 +1,21 @@
 ﻿using UnityEngine;
 
 [System.Serializable]
-public class MapTile
+public class MapTileType
 {
   public Color32 color;
   public string name;
-  public int moveVal;
+  public float moveMult;
+}
 
+[System.Serializable]
+public class TileData
+{
+  public MapTileType type;
+  public bool moveUp;
+  public bool moveDown;
+  public bool moveLeft;
+  public bool moveRight;
 }
 
 [System.Serializable]

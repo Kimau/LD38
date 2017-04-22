@@ -10,10 +10,10 @@ public class MapTerrain : MonoBehaviour
   public int width = 512;
   public int height = 512;
   public Texture2D m_sourcMap;
-  public MapTile[] m_tileData;
+  public MapTileType[] m_tileData;
 
   // 
-  int[] m_tileType;
+  TileData[] m_tiles;
   Color32[] m_colBuffer;
   Texture2D m_surfaceTex;
 
@@ -27,12 +27,20 @@ public class MapTerrain : MonoBehaviour
 
     m_colBuffer = new Color32[width * height];
     m_surfaceTex = new Texture2D(width, height, TextureFormat.ARGB32, false);
-    m_tileType = new int[width * height];
+    m_tiles = new TileData[width * height];
     m_surfaceTex.filterMode = FilterMode.Point;
 
     RegenSurface();
 
     m_renderer.material.mainTexture = m_surfaceTex;
+  }
+
+  public TileData GetMapTile(Vector2 pos)
+  {
+    int xi = Mathf.FloorToInt(Mathf.Clamp(pos.x, 0, width-0.2f));
+    int yi = Mathf.FloorToInt(Mathf.Clamp(pos.y, 0, height-0.2f));
+
+    return m_tiles[xi + yi * width];
   }
 
   int NearestMapTile(Color32 col)
@@ -76,8 +84,11 @@ public class MapTerrain : MonoBehaviour
             Mathf.FloorToInt((y * invHeight) * m_sourcMap.height));
 
           int mapID = NearestMapTile(p);
-          m_tileType[x + y * height] = mapID;
-          m_colBuffer[x + y * height] = m_tileData[mapID].color;
+
+          TileData td = new TileData();
+          td.type = m_tileData[mapID];
+          m_tiles[x + y * width] = td;
+          m_colBuffer[x + y * width] = td.type.color;
         }
       }
     } else
@@ -88,14 +99,62 @@ public class MapTerrain : MonoBehaviour
         for (int y = 0; y < height; y++)
         {
           int mapID = Mathf.FloorToInt(Random.value * m_tileData.Length);
-          m_tileType[x + y * height] = mapID;
-          m_colBuffer[x + y * height] = m_tileData[mapID].color;
+
+          TileData td = new TileData();
+          td.type = m_tileData[mapID];
+          m_tiles[x + y * width] = td;
+          m_colBuffer[x + y * width] = td.type.color;
         }
       }
     }
 
-    m_surfaceTex.SetPixels32(m_colBuffer);
+    // Do Map Checks
+    for (int x = 0; x < width; x++)
+    {
+      for (int y = 0; y < height; y++)
+      {
+        TileData td = m_tiles[x + y * width];
+        td.moveUp = ((y + 1) < width) && (m_tiles[x + (y+1) * width].type.moveMult > 0);
+        td.moveDown = (y > 0) && (m_tiles[x + (y-1) * width].type.moveMult > 0);
+        td.moveLeft = (x > 0) && (m_tiles[(x - 1) + y * width].type.moveMult > 0);
+        td.moveRight = ((x + 1) < width) && (m_tiles[(x + 1) + y * width].type.moveMult > 0);
+      }
+    }
+
+        m_surfaceTex.SetPixels32(m_colBuffer);
     m_surfaceTex.Apply(false);
+  }
+
+  public Vector2 GetRandomMapSpawn()
+  {
+    for(int stoplock = 0; stoplock < 100; ++stoplock) {
+      Vector2 p = new Vector2(Random.value * width, Random.value * height);
+
+      int i = 0;
+      var mt = GetMapTile(p);
+      while((i < 100) && mt.type.moveMult < 0.4)
+      {
+        // Move Inland
+        Vector2 np = new Vector2(
+          (p.x - width * 0.5f) * 0.9f + width * 0.5f,
+         (p.y - height * 0.5f) * 0.9f + height * 0.5f);
+        
+        Debug.DrawLine(new Vector3(p.x, 1.0f, p.y), new Vector3(np.x, 1.0f, np.y));
+
+        p = np;
+        mt = GetMapTile(p);
+        i++;
+      }
+
+      if(mt.type.moveMult < 0.4) {
+        return p;
+      }
+
+      p = new Vector2(Random.value * width, Random.value * height);
+    }
+
+    Debug.LogError("Failed to place so doing Random");
+    return new Vector2(Random.value * width, Random.value * height);
   }
 
   // Update is called once per frame
