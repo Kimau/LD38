@@ -7,6 +7,7 @@ public class TwitchGame : MonoBehaviour
 {
   public GameObject templatePlayer;
   public MiniMap miniMap;
+  public KillAnimEnd markerPrefab;
   public MapTerrain gameMap;
   const int maxPlayerCount = 256;
 
@@ -144,6 +145,9 @@ public class TwitchGame : MonoBehaviour
       if (msg.msg.content.Contains("!join"))
       {
         PlayerJoin(msg.msg.userid, msg.msg.nick);
+      } else if (msg.msg.content.Contains("!"))
+      {
+        TwitchUDPLinker.Say("Please enter ❕join to play");
       }
     }
     else
@@ -175,6 +179,14 @@ public class TwitchGame : MonoBehaviour
 
   }
 
+  void MarkerAt(Vector2 pos, Color32 col)
+  {
+    var marker = Instantiate(markerPrefab, transform);
+    marker.transform.localPosition = new Vector3(pos.x, 0, pos.y);
+    var kae = marker.GetComponent<KillAnimEnd>();
+      kae.SetColour(col);
+  }
+
 
   //---------------------------------------------------------------------------------
   // Player Functions
@@ -198,6 +210,7 @@ public class TwitchGame : MonoBehaviour
   void PlayerMove(GamePlayer p, string msgCmd)
   {
     p.doingWhat = PlayerDoing.Walking;
+    p.tarPos.x = -1;
 
     msgCmd = msgCmd.ToLower();
 
@@ -234,7 +247,7 @@ public class TwitchGame : MonoBehaviour
     y = Mathf.Clamp(y, 0, gameMap.height-1);
 
     p.tarPos = new Vector2(x, y);
-    Debug.Log(p.tarPos);
+    MarkerAt(p.tarPos, p.col);
   }
 
   void PlayerStop(GamePlayer p)

@@ -18,6 +18,7 @@ public class TwitchUDPLinker : MonoBehaviour
   UdpClient client;
 
   static Queue<string> msgQ;
+  static Queue<string> sayQ;
 
   // start from unity3d
   public void Start()
@@ -25,10 +26,19 @@ public class TwitchUDPLinker : MonoBehaviour
     Debug.Log("Starting Listener");
 
     msgQ = new Queue<string>();
+    sayQ = new Queue<string>();
 
     receiveThread = new Thread(new ThreadStart(ReceiveData));
     receiveThread.IsBackground = true;
     receiveThread.Start();
+  }
+
+  public static void Say(string msg)
+  {
+    lock(sayQ)
+    {
+      sayQ.Enqueue(msg);
+    }
   }
 
   public void OnDisable()
@@ -50,8 +60,8 @@ public class TwitchUDPLinker : MonoBehaviour
       }
     }
 
-    // Process Messages
-    foreach (string line in newChatMsgs)
+      // Process Messages
+      foreach (string line in newChatMsgs)
     {
       string content = line;
 
@@ -108,6 +118,24 @@ public class TwitchUDPLinker : MonoBehaviour
         {
           msgQ.Enqueue(text);
         }
+
+        // Outgoing Msgs
+        List<string> newChatMsgs = new List<string>();
+        lock (sayQ)
+        {
+          while (sayQ.Count > 0)
+          {
+            newChatMsgs.Add(sayQ.Dequeue());
+          }
+        }
+
+        // Send Message
+        foreach (string line in newChatMsgs)
+        {
+          byte[] msgData = Encoding.UTF8.GetBytes("[say]"+line);
+          client.Send(msgData, msgData.Length);
+        }
+
       }
       catch (Exception err)
       {
