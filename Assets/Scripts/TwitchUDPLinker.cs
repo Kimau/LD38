@@ -11,7 +11,10 @@ public class TwitchUDPLinker : MonoBehaviour
 {
   public int remotePort;
   public int listenPort;
-  public TwitchGame myGame;
+  public GameObject msgHandler;
+
+  TwitchGame internalMsgGame;
+  LobbyManager internalMsgLobby;
 
   // receiving Thread
   Thread receiveThread;
@@ -24,6 +27,7 @@ public class TwitchUDPLinker : MonoBehaviour
   public void Start()
   {
     Debug.Log("Starting Listener");
+    Application.runInBackground = true;
 
     msgQ = new Queue<string>();
     sayQ = new Queue<string>();
@@ -74,10 +78,11 @@ public class TwitchUDPLinker : MonoBehaviour
 
         Debug.Log("Tag: " + tag + " Content: " + content);
       }
-      else if (content[0] == '{')
+      else if ((content[0] == '{') && (msgHandler))
       {
         TwitchMsg msg = TwitchMsg.CreateFromJSON(content);
-        myGame.handleMsg(msg);
+
+        internalHandleMsg(msg);
       }
       else
       {
@@ -85,6 +90,63 @@ public class TwitchUDPLinker : MonoBehaviour
       }
     }
   }
+
+  private void internalHandleMsg(TwitchMsg msg)
+  {
+    if (((internalMsgGame!=null) && (internalMsgGame.gameObject == msgHandler)) ||
+       ((internalMsgLobby != null) && (internalMsgLobby.gameObject == msgHandler)))
+    {
+      // All okay?? What fucking horror is this code
+    } else
+    {
+      internalMsgGame = msgHandler.GetComponent<TwitchGame>();
+      internalMsgLobby = msgHandler.GetComponent<LobbyManager>();
+    }
+
+    if (internalMsgGame)
+      internalMsgGame.handleMsg(msg);
+    if (internalMsgLobby)
+      internalMsgLobby.handleMsg(msg);
+  }
+
+  List<TwitchMsg> fakePlayers = new List<TwitchMsg>();
+  string newfakenick = "nickme";
+  void OnGUI()
+  {
+    // Make a background box
+    int y = 400;
+    GUI.Box(new Rect(10, y, 100, 110), "Fake Message"); y += 25;
+    newfakenick = GUI.TextField(new Rect(10, y, 100, 20), newfakenick); y += 25;
+    if (GUI.Button(new Rect(20, y, 80, 20), "Add"))
+    {
+      TwitchMsg msg = new TwitchMsg();
+      msg.cat = 35;
+      msg.body = "!join";
+      msg.msg = new TwitchSubMsg();
+      msg.msg.userid = "_" + newfakenick;
+      msg.msg.nick = newfakenick;
+      msg.msg.content = "!join";
+      fakePlayers.Add(msg);
+
+      internalHandleMsg(msg);
+
+      newfakenick += "1";
+    }
+
+    int x = 120;
+    foreach (var p in fakePlayers)
+    {
+      y = 480;
+      p.msg.content = GUI.TextField(new Rect(x, y, 100, 20), p.msg.content); y += 25;
+      if (GUI.Button(new Rect(x + 10, y, 80, 20), "Submit"))
+      {
+        internalHandleMsg(p);
+      }
+
+      x += 110;
+    }
+  }
+
 
   void OnApplicationQuit()
   {
@@ -104,8 +166,6 @@ public class TwitchUDPLinker : MonoBehaviour
     client.Send(greetingdata, greetingdata.Length);
 
     // IPEndPoint endPointListen = new IPEndPoint(IPAddress.Parse("127.0.0.1"), listenPort);
-
-    byte[] pongData = Encoding.UTF8.GetBytes("Pong");
 
     while (Thread.CurrentThread.IsAlive)
     {

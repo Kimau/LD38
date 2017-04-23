@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 using UnityEngine;
 
 public class TwitchGame : MonoBehaviour
-{
+{ 
   public GameObject templatePlayer;
   public MiniMap miniMap;
   public KillAnimEnd markerPrefab;
@@ -18,13 +18,11 @@ public class TwitchGame : MonoBehaviour
   public float gameSpeed = 1.0f;
 
   int currPlayerCount = 0;
-  GamePlayer[] m_players;
+  GamePlayer[] m_players = new GamePlayer[maxPlayerCount];
 
   // Use this for initialization
   void Start()
   {
-    m_players = new GamePlayer[maxPlayerCount];
-    Application.runInBackground = true;
 
     transform.localScale = new Vector3(20.0f / gameMap.width, 20.0f / gameMap.width, 20.0f / gameMap.width);
 
@@ -103,45 +101,6 @@ public class TwitchGame : MonoBehaviour
     }
   }
 
-  List<TwitchMsg> fakePlayers = new List<TwitchMsg>();
-  List<string> fakemsgs = new List<string>();
-  string newfakenick = "nickme";
-  void OnGUI()
-  {
-    // Make a background box
-    int y = 400;
-    GUI.Box(new Rect(10, y, 100, 110), "Fake Message"); y += 25;
-    newfakenick = GUI.TextField(new Rect(10, y, 100, 20), newfakenick); y += 25;
-    if (GUI.Button(new Rect(20, y, 80, 20), "Add"))
-    {
-      TwitchMsg msg = new TwitchMsg();
-      msg.cat = 35;
-      msg.body = "!join";
-      msg.msg = new TwitchSubMsg();
-      msg.msg.userid = "_" + newfakenick;
-      msg.msg.nick = newfakenick;
-      msg.msg.content = "!join";
-      fakePlayers.Add(msg);
-
-      handleMsg(msg);
-
-      newfakenick += "1";
-    }
-
-    int x = 120;
-    foreach (var p in fakePlayers)
-    {
-      y = 480;
-      p.msg.content = GUI.TextField(new Rect(x, y, 100, 20), p.msg.content); y += 25;
-      if (GUI.Button(new Rect(x+10, y, 80, 20), "Submit"))
-      {
-        handleMsg(p);
-      }
-
-      x += 110;
-    }
-  }
-
   private float stepMovePlayer(GamePlayer p, float travelDist)
   {
     TileData mt = gameMap.GetMapTile(p.mapPos);
@@ -191,16 +150,7 @@ public class TwitchGame : MonoBehaviour
     }
 
     var p = GetPlayer(msg.msg.userid);
-    if (p == null)
-    {
-      // Not in game
-      if (msg.msg.content.Contains("!join"))
-        PlayerJoin(msg.msg.userid, msg.msg.nick);
-      else
-        TwitchUDPLinker.Say("Please ❕join to play");
-
-    }
-    else
+    if (p != null)
     {
       miniMap.targetPlayer = p;
 
@@ -265,23 +215,17 @@ public class TwitchGame : MonoBehaviour
 
   //---------------------------------------------------------------------------------
   // Player Functions
-  void PlayerJoin(string id, string nick)
+  void PlayerJoin(GamePlayer p)
   {
-    GamePlayer gp = ScriptableObject.CreateInstance<GamePlayer>();
-    gp.nick = nick;
-    gp.userid = id;
-    gp.col = Random.ColorHSV(0, 1, 0.5f, 1, 0.5f, 1);
-    gp.doingWhat = PlayerDoing.Standing;
-    gp.mapPos = gameMap.GetRandomMapSpawn();
-    gp.tarPos.x = -1.0f;
+    p.doingWhat = PlayerDoing.Standing;
+    p.mapPos = gameMap.GetRandomMapSpawn();
+    p.tarPos.x = -1.0f;
 
     var newPlayer = Instantiate(templatePlayer, transform);
-    newPlayer.GetComponent<PlayerGO>().SetPlayerData(ref gp);
+    newPlayer.GetComponent<PlayerGO>().SetPlayerData(ref p);
 
-    PingAt(gp.mapPos);
-
-    m_players[currPlayerCount++] = gp;
-    miniMap.targetPlayer = gp;
+    PingAt(p.mapPos);
+    miniMap.targetPlayer = p;
   }
 
   void PlayerMove(GamePlayer p, string msgCmd)
