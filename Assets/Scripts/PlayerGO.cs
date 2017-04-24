@@ -2,21 +2,17 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-
+[RequireComponent(typeof(Renderer))]
 public class PlayerGO : MonoBehaviour {
 
   GamePlayer playerData;
-  MaterialPropertyBlock matBlock;
-
-  public Material myMat;
-
-  // Cached
-  Renderer m_renderer;
-
+  TMPro.TextMeshPro nameTag;
+  float randomBias = 0.0f;
+  
   // Use this for initialization
   void Start()
   {
-    m_renderer = GetComponentInChildren<Renderer>();
+    randomBias = Random.Range(-0.01f, +0.01f);
   }
 	
 	// Update is called once per frame
@@ -38,6 +34,12 @@ public class PlayerGO : MonoBehaviour {
 
     transform.localScale = Vector3.one * 10.0f;
 
+    // Always Upside
+    if(nameTag)
+    {
+      nameTag.transform.position = transform.position + new Vector3(0, 0.1f+ randomBias, 0.5f);
+      nameTag.transform.rotation = Quaternion.LookRotation(Camera.main.transform.forward, Camera.main.transform.up);
+    }
   }
 
   public void SetPlayerData(ref GamePlayer gp)
@@ -46,11 +48,18 @@ public class PlayerGO : MonoBehaviour {
 
     gameObject.name = "Player " + playerData.nick;
 
-    matBlock = new MaterialPropertyBlock();
-    matBlock.SetColor("_Color", playerData.col);
+    var matCols = GetComponentsInChildren<setMatColour>();
+    foreach (var item in matCols)
+    {
+      item.Color = playerData.col;
+      item.UpdateValues();
+    }
 
-    // Set Colour
-    m_renderer = GetComponentInChildren<Renderer>();
-    m_renderer.SetPropertyBlock(matBlock);
+    if(nameTag == null)
+    {
+      nameTag = GetComponentInChildren<TMPro.TextMeshPro>();
+      nameTag.SetText(playerData.nick);
+    }
+    
   }
 }

@@ -7,13 +7,25 @@ using UnityEngine;
 public class MapTerrain : MonoBehaviour
 {
 
-  public int width = 512;
-  public int height = 512;
+  public int width = 1024;
+  public int height = 1024;
+  public int subWidth = 64;
+  public int subHeight = 64;
+  public int gridWidth;
+  public int gridHeight;
+
+
+  // GRID 0 Nothing
+  // GRID 1 Safe
+  // GRID 2 Danger
+  // GRID 3 Kill
+
   public Texture2D m_sourcMap;
-  public MapTileType[] m_tileData;
+  public MapTileType[] m_sourceTileAssets;
 
   // 
   TileData[] m_tiles;
+  int[] m_gridValues;
   Color32[] m_colBuffer;
   Texture2D m_surfaceTex;
 
@@ -23,15 +35,21 @@ public class MapTerrain : MonoBehaviour
   // Use this for initialization
   void Start()
   {
+    gridWidth = width / subWidth;
+    gridHeight = width / subWidth;
+
     m_renderer = GetComponent<Renderer>();
 
     m_colBuffer = new Color32[width * height];
     m_surfaceTex = new Texture2D(width, height, TextureFormat.ARGB32, false);
-    
+
     m_tiles = new TileData[width * height];
+    m_gridValues = new int[gridWidth * gridHeight];
     m_surfaceTex.filterMode = FilterMode.Point;
 
+
     RegenSurface();
+    SetupGridSquares();
 
     m_renderer.material.mainTexture = m_surfaceTex;
   }
@@ -49,9 +67,9 @@ public class MapTerrain : MonoBehaviour
     int res = -1;
     int closeDist = 1000000;
 
-    for (int i = 0; i < m_tileData.Length; i++)
+    for (int i = 0; i < m_sourceTileAssets.Length; i++)
     {
-      Color32 p = m_tileData[i].color;
+      Color32 p = m_sourceTileAssets[i].color;
       int dif =
               (col.r - p.r) * (col.r - p.r) +
               (col.g - p.g) * (col.g - p.g) +
@@ -65,6 +83,33 @@ public class MapTerrain : MonoBehaviour
     }
 
     return res;
+  }
+
+  public int[] GetGridData() { return m_gridValues; }
+
+  void SetupGridSquares()
+  {
+    // Eval Square
+    for (int x = 0; x < gridWidth; x++)
+    {
+      for (int y = 0; y < gridHeight; y++)
+      {
+        bool walkable = false;
+
+        for (int sx = 0; (!walkable) && (sx < subWidth); sx++)
+        {
+          for (int sy = 0; (!walkable) && (sy < subHeight); sy++)
+          {
+            int offset = (x * subWidth + sx) + (y * subHeight + sy) * width;
+            if (m_tiles[offset].type.moveMult > 0)
+              walkable = true;
+          }
+        }
+
+        m_gridValues[x + y * gridWidth] = (walkable) ? 1 : 3;
+      }
+    }
+
   }
 
   void RegenSurface()
@@ -83,12 +128,12 @@ public class MapTerrain : MonoBehaviour
           // EXTREMELY STUPID WAY TODO THIS BUT JAM AND HACKABLE
           int sx = Mathf.FloorToInt((x * invWidth) * m_sourcMap.width);
           int sy = Mathf.FloorToInt((y * invHeight) * m_sourcMap.height);
-          Color32 p = srcPixelData[ sx + sy * m_sourcMap.width];
+          Color32 p = srcPixelData[sx + sy * m_sourcMap.width];
 
           int mapID = NearestMapTile(p);
 
           TileData td = new TileData();
-          td.type = m_tileData[mapID];
+          td.type = m_sourceTileAssets[mapID];
           m_tiles[x + y * width] = td;
           m_colBuffer[x + y * width] = td.type.color;
         }
@@ -103,10 +148,10 @@ public class MapTerrain : MonoBehaviour
       {
         for (int y = 0; y < height; y++)
         {
-          int mapID = Mathf.FloorToInt(Random.value * m_tileData.Length);
+          int mapID = Mathf.FloorToInt(Random.value * m_sourceTileAssets.Length);
 
           TileData td = new TileData();
-          td.type = m_tileData[mapID];
+          td.type = m_sourceTileAssets[mapID];
           m_tiles[x + y * width] = td;
           m_colBuffer[x + y * width] = td.type.color;
         }
@@ -115,6 +160,8 @@ public class MapTerrain : MonoBehaviour
 
     m_surfaceTex.SetPixels32(m_colBuffer);
     m_surfaceTex.Apply(false);
+
+    Debug.Log("Map Regerenated");
   }
 
   public Vector2 GetRandomMapSpawn()

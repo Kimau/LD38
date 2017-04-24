@@ -89,40 +89,44 @@ public class WeaponEditor : Editor
     }
 
     // Damge Boxes
-    int dmgBoxSize = (TexWidth - 5) / (w.maxDmg);
-    int dmgBoxHeight = (TexHeight / 8);
+    if (w.maxDmg > 0)
+    {      
+      int dmgBoxSize = (TexWidth - 5) / (w.maxDmg);
+      int dmgBoxHeight = (TexHeight / 8);
 
-    if (dmgBoxSize < 5)
-    {
-      for (int i = 0; i < w.minDmg; i++)
-        for (int x = 1; x < dmgBoxSize; x++)
-          for (int y = 0; y < dmgBoxHeight; y++)
-            colBlock[2 + (dmgBoxSize * i) + x + (TexHeight - 2 - dmgBoxHeight + y) * TexWidth] = borderCol;
-
-      for (int i = w.minDmg; i < w.maxDmg; i++)
-        for (int x = 1; x < dmgBoxSize; x++)
-          for (int y = dmgBoxHeight / 2; y < dmgBoxHeight; y++)
-            colBlock[2 + (dmgBoxSize * i) + x + (TexHeight - 2 - dmgBoxHeight + y) * TexWidth] = borderCol;
-    }
-    else
-    {
-      for (int i = 0; i < w.minDmg; i++)
-        for (int x = 1; x < dmgBoxSize; x++)
-          for (int y = 0; y < dmgBoxHeight; y++)
-            colBlock[2 + (dmgBoxSize * i) + x + (TexHeight - 2 - dmgBoxHeight + y) * TexWidth] = borderCol;
-
-      for (int i = w.minDmg; i < w.maxDmg; i++)
+      if (dmgBoxSize < 5)
       {
-        for (int x = 1; x < dmgBoxSize; x++)
-          for (int y = 0; y < dmgBoxHeight; y += dmgBoxHeight - 2)
-            colBlock[2 + (dmgBoxSize * i) + x + (TexHeight - 2 - dmgBoxHeight + y) * TexWidth] = borderCol;
+        for (int i = 0; i < w.minDmg; i++)
+          for (int x = 1; x < dmgBoxSize; x++)
+            for (int y = 0; y < dmgBoxHeight; y++)
+              colBlock[2 + (dmgBoxSize * i) + x + (TexHeight - 2 - dmgBoxHeight + y) * TexWidth] = borderCol;
 
-        for (int x = 1; x < dmgBoxSize; x += (dmgBoxSize - 2))
-          for (int y = 0; y < dmgBoxHeight; y++)
-            colBlock[2 + (dmgBoxSize * i) + x + (TexHeight - 2 - dmgBoxHeight + y) * TexWidth] = borderCol;
+        for (int i = w.minDmg; i < w.maxDmg; i++)
+          for (int x = 1; x < dmgBoxSize; x++)
+            for (int y = dmgBoxHeight / 2; y < dmgBoxHeight; y++)
+              colBlock[2 + (dmgBoxSize * i) + x + (TexHeight - 2 - dmgBoxHeight + y) * TexWidth] = borderCol;
+      }
+      else
+      {
+        for (int i = 0; i < w.minDmg; i++)
+          for (int x = 1; x < dmgBoxSize; x++)
+            for (int y = 0; y < dmgBoxHeight; y++)
+              colBlock[2 + (dmgBoxSize * i) + x + (TexHeight - 2 - dmgBoxHeight + y) * TexWidth] = borderCol;
+
+        for (int i = w.minDmg; i < w.maxDmg; i++)
+        {
+          for (int x = 1; x < dmgBoxSize; x++)
+            for (int y = 0; y < dmgBoxHeight; y += dmgBoxHeight - 2)
+              colBlock[2 + (dmgBoxSize * i) + x + (TexHeight - 2 - dmgBoxHeight + y) * TexWidth] = borderCol;
+
+          for (int x = 1; x < dmgBoxSize; x += (dmgBoxSize - 2))
+            for (int y = 0; y < dmgBoxHeight; y++)
+              colBlock[2 + (dmgBoxSize * i) + x + (TexHeight - 2 - dmgBoxHeight + y) * TexWidth] = borderCol;
+        }
       }
     }
 
+    //
     Texture2D staticPreview = new Texture2D(TexWidth, TexHeight);
     staticPreview.SetPixels(0, 0, TexWidth, TexHeight, colBlock);
     staticPreview.Apply();

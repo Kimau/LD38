@@ -5,19 +5,35 @@ using UnityEngine;
 public class LobbyManager : MonoBehaviour
 {
 
-  public TextMesh playerSlotStart;
-  public TextMesh playerNum;
-  public TextMesh startCounter;
+  public TMPro.TextMeshPro playerSlotStart;
+  public TMPro.TextMeshPro playerNum;
+  public TMPro.TextMeshPro startCounter;
+
+  string playerText;
+  string counterText;
+
+  List<TMPro.TextMeshPro> playerSlots = new List<TMPro.TextMeshPro>();
 
   const int maxPlayerCount = 256;
   int currPlayerCount = 0;
   GamePlayer[] m_players = new GamePlayer[maxPlayerCount];
 
-  int clockCounter = -1;
+  int startClockValue = -1;
 
   // Use this for initialization
   void Start()
   {
+    playerText = playerNum.text;
+    counterText = startCounter.text;
+
+    playerNum.SetText(currPlayerCount + playerText);
+    startCounter.SetText(counterText + startClockValue);
+    startCounter.gameObject.SetActive(false);
+
+    playerSlotStart.gameObject.SetActive(false);
+    UpdatePlayerList();    
+
+    TwitchUDPLinker.Sub(handleMsg);
   }
 
   // Update is called once per frame
@@ -41,21 +57,39 @@ public class LobbyManager : MonoBehaviour
       return;
     }
 
-    var p = GetPlayer(msg.msg.userid);
-    if (p == null)
+    // Admin Commands
+    if (msg.msg.badge.Contains("C"))
     {
-      // Not in game
-      if (msg.msg.content.Contains("!join"))
-        PlayerJoin(msg.msg.userid, msg.msg.nick);
+      bool hasAdminSpoke = true;
+      if (msg.msg.content.Contains("!skipcount"))
+        AdminSkipCount();
       else
-        TwitchUDPLinker.Say("Please ❕join to play");
+        hasAdminSpoke = false;
+
+      if (hasAdminSpoke)
+        return;
     }
-    else
+
+    // Player Commands
+    var p = GetPlayer(msg.msg.userid);
+    if (p != null)
     {
       if (msg.msg.content.Contains("!quit"))
         PlayerQuit(p);
+
+      return;
     }
 
+    // Viewer Commands
+    if (msg.msg.content.Contains("!join"))
+      PlayerJoin(msg.msg.userid, msg.msg.nick);
+
+    //TwitchUDPLinker.Say("Please ❕join to play");
+  }
+
+  public void AdminSkipCount()
+  {
+    startClockValue = 0;
   }
 
 
@@ -75,75 +109,86 @@ public class LobbyManager : MonoBehaviour
 
   void UpdatePlayerList()
   {
-    playerNum.text = "" + currPlayerCount;
-
-    if (currPlayerCount == 0)
+    int i;
+    for (i = playerSlots.Count; (i < currPlayerCount) || (i < 4); ++i)
     {
-      playerSlotStart.text = "________________";
-      return;
+      var newSlot = Instantiate(playerSlotStart, playerSlotStart.transform.parent);
+      int x = i % 4;
+      int y = i / 4;
+      newSlot.rectTransform.position = playerSlotStart.rectTransform.position + 
+        new Vector3(x * playerSlotStart.rectTransform.rect.width, 
+        -y * playerSlotStart.rectTransform.rect.height, 0);
+      newSlot.gameObject.SetActive(true);
+      playerSlots.Add(newSlot);
     }
 
-    string result = "";
-
     // Player Names
-    for (int i = 0; i < currPlayerCount; ++i)
+    for (i = 0; i < currPlayerCount; ++i)
     {
-      if (m_players[i].nick.Length >= 15)
-      {
-        result += m_players[i].nick.Substring(0, 15);
-      }
-      else
-      {
-        result += m_players[i].nick;
-        for (int c = m_players[i].nick.Length; c < 15; ++c)
-          result += "_";
-      }
-      result += "\t";
-
-      if (((i + 1) % 4) == 0)
-        result += "\n";
+      var slot = playerSlots[i];
+      slot.gameObject.SetActive(true);
+      slot.text = m_players[i].nick;
     }
 
     // Min Number
-    if (currPlayerCount < 4)
+    for (; i < 4; ++i)
     {
-      for (int i = currPlayerCount; i < 4; ++i)
-      {
-        for (int c = 0; c < 15; ++c)
-          result += "_";
-        result += "\t";
-      }
-      result += "\n Minimum 4 Players";
+      var slot = playerSlots[i];
+      slot.gameObject.SetActive(true);
+      slot.text = "<color=#FFFFFF66>[Waiting]</color>";
     }
 
-    playerSlotStart.text = result;
+    // Hide Unused
+    for (; i < playerSlots.Count; ++i)
+      playerSlots[i].gameObject.SetActive(false);
 
     // Handle Countdown Clock
-    if ((clockCounter < 0) && (currPlayerCount >= 4))
+    if ((startClockValue < 0) && (currPlayerCount >= 4))
       StartCoroutine(StartCountdown());
   }
 
   IEnumerator StartCountdown()
   {
-    clockCounter = 60;
-    startCounter.text = "" + clockCounter;
+    startClockValue = 60;
+    startCounter.SetText(counterText + startClockValue);
     startCounter.gameObject.SetActive(true);
 
-    while (clockCounter > 0)
+    while (startClockValue > 0)
     {
       yield return new WaitForSeconds(1);
-      --clockCounter;
-      startCounter.text = "" + clockCounter;
+      --startClockValue;
+      startCounter.SetText(counterText + startClockValue);
     }
 
-    startGame();
+    yield return startGame();
   }
 
-  void startGame()
+  IEnumerator startGame()
   {
     TwitchUDPLinker.Say("Game starting with " + currPlayerCount + " players.");
-
     Debug.Log("Start Game");
+
+    var loadOp = SceneLoader.LoadGameAsync();
+    loadOp.allowSceneActivation = false;  // Ensures at least one loop
+    while (loadOp.isDone == false)
+    {
+      yield return new WaitForSeconds(1);
+
+      Debug.Log("Progress: " + loadOp.progress);
+
+      // Allow Scene to Finish
+      loadOp.allowSceneActivation = true;
+    }
+
+    Debug.Log("Progress: " + loadOp.progress);
+    Camera.main.gameObject.SetActive(false);
+
+    var twitchGame = FindObjectOfType<TwitchGame>();
+
+    for (int i = 0; i < currPlayerCount; ++i)
+      twitchGame.PlayerJoin(m_players[i]);
+
+    twitchGame.GameStart();
   }
 
   void PlayerJoin(string id, string nick)
@@ -152,7 +197,7 @@ public class LobbyManager : MonoBehaviour
     gp.nick = nick;
     gp.userid = id;
     gp.col = Random.ColorHSV(0, 1, 0.5f, 1, 0.5f, 1);
-    
+
     m_players[currPlayerCount++] = gp;
 
     // Make Name Take

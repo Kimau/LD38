@@ -1,0 +1,86 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSGridMain
+
+int4 SquareSize;
+float OutlineAmount;
+
+StructuredBuffer<int> SquareData;
+RWStructuredBuffer<float3> VertBuf;
+RWStructuredBuffer<float4> ColBuf;
+RWStructuredBuffer<int> IndxBuf;
+
+#define OUTLINE (OutlineAmount) 
+
+static float4 ColourChoices[4] = 
+{
+	float4(0.5f, 0.5f, 0.5f, 0.1f),  // 0 Nothing
+	float4(1.0f, 1.0f, 1.0f, 0.3f),  // 1 Safe
+    float4(1.0f, 1.0f, 0.0f, 0.6f),  // 2 Danger
+    float4(1.0f, 0.0f, 0.0f, 0.7f),  // 3 Kill 
+}; 
+
+[numthreads(1,1,1)]
+void CSGridMain (uint3 id : SV_DispatchThreadID, uint3 gid : SV_GroupID)
+{
+	const int sx = gid.x;
+	const int sy = gid.y;
+	const int sqrOffset = gid.x + SquareSize.z*gid.y; 
+	const int squareVal = SquareData[sqrOffset];
+
+	// Generate Mesh
+	int tOff = sqrOffset* 4*2;
+	VertBuf[tOff+0+0] = float3(sx             * SquareSize.x, sy             * SquareSize.y, 0);
+	VertBuf[tOff+1+0] = float3((sx+1)         * SquareSize.x, sy             * SquareSize.y, 0);
+	VertBuf[tOff+2+0] = float3((sx+1)         * SquareSize.x, (sy+1)         * SquareSize.y, 0);
+	VertBuf[tOff+3+0] = float3(sx             * SquareSize.x, (sy+1)         * SquareSize.y, 0);
+	VertBuf[tOff+0+4] = float3((sx+OUTLINE)   * SquareSize.x, (sy+OUTLINE)   * SquareSize.y, 0);
+	VertBuf[tOff+1+4] = float3((sx+1-OUTLINE) * SquareSize.x, (sy+OUTLINE)   * SquareSize.y, 0);
+	VertBuf[tOff+2+4] = float3((sx+1-OUTLINE) * SquareSize.x, (sy+1-OUTLINE) * SquareSize.y, 0);
+	VertBuf[tOff+3+4] = float3((sx+OUTLINE)   * SquareSize.x, (sy+1-OUTLINE) * SquareSize.y, 0);
+
+	// Colours
+	float4 col = float4(0,0,0,-1);
+	if(squareVal >= 0) {
+		col = ColourChoices[squareVal];
+	} 
+
+	ColBuf[tOff+0+0] = col;
+	ColBuf[tOff+1+0] = col;
+	ColBuf[tOff+2+0] = col;
+	ColBuf[tOff+3+0] = col;
+	ColBuf[tOff+0+4] = col;
+	ColBuf[tOff+1+4] = col;
+	ColBuf[tOff+2+4] = col;
+	ColBuf[tOff+3+4] = col;
+
+	// Index
+	const int iOff = sqrOffset* 4*2*3;
+
+	IndxBuf[iOff+ 0+0+0] = tOff+0+0;
+	IndxBuf[iOff+ 0+0+1] = tOff+0+3;
+	IndxBuf[iOff+ 0+0+2] = tOff+4+3;
+	IndxBuf[iOff+ 0+3+0] = tOff+0+0;
+	IndxBuf[iOff+ 0+3+1] = tOff+4+3;
+	IndxBuf[iOff+ 0+3+2] = tOff+4+0;
+			
+	IndxBuf[iOff+ 6+0+0] = tOff+0+3;
+	IndxBuf[iOff+ 6+0+1] = tOff+0+2;
+	IndxBuf[iOff+ 6+0+2] = tOff+4+2;
+	IndxBuf[iOff+ 6+3+0] = tOff+0+3;
+	IndxBuf[iOff+ 6+3+1] = tOff+4+2;
+	IndxBuf[iOff+ 6+3+2] = tOff+4+3;
+			
+	IndxBuf[iOff+12+0+0] = tOff+0+2; 
+	IndxBuf[iOff+12+0+1] = tOff+0+1;
+	IndxBuf[iOff+12+0+2] = tOff+4+1;
+	IndxBuf[iOff+12+3+0] = tOff+0+2;
+	IndxBuf[iOff+12+3+1] = tOff+4+1;
+	IndxBuf[iOff+12+3+2] = tOff+4+2;
+			
+	IndxBuf[iOff+18+0+0] = tOff+0+1;
+	IndxBuf[iOff+18+0+1] = tOff+0+0;
+	IndxBuf[iOff+18+0+2] = tOff+4+0;
+	IndxBuf[iOff+18+3+0] = tOff+0+1;
+	IndxBuf[iOff+18+3+1] = tOff+4+0;
+	IndxBuf[iOff+18+3+2] = tOff+4+1;
+}

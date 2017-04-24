@@ -11,10 +11,9 @@ public class TwitchUDPLinker : MonoBehaviour
 {
   public int remotePort;
   public int listenPort;
-  public GameObject msgHandler;
 
-  TwitchGame internalMsgGame;
-  LobbyManager internalMsgLobby;
+  public delegate void TwitchHandleMsg(TwitchMsg msg);
+  public TwitchHandleMsg msgHandlerDel;
 
   // receiving Thread
   Thread receiveThread;
@@ -35,6 +34,20 @@ public class TwitchUDPLinker : MonoBehaviour
     receiveThread = new Thread(new ThreadStart(ReceiveData));
     receiveThread.IsBackground = true;
     receiveThread.Start();
+  }
+
+  public static bool Sub(TwitchHandleMsg del)
+  {
+    var link = FindObjectOfType<TwitchUDPLinker>();
+    if (link == null)
+    {
+      Debug.LogError("Cannot find Twitch Link");
+      return false;
+    } else
+    {
+      link.msgHandlerDel = del;
+      return true;
+    }    
   }
 
   public static void Say(string msg)
@@ -78,7 +91,7 @@ public class TwitchUDPLinker : MonoBehaviour
 
         Debug.Log("Tag: " + tag + " Content: " + content);
       }
-      else if ((content[0] == '{') && (msgHandler))
+      else if ((content[0] == '{') && (msgHandlerDel != null))
       {
         TwitchMsg msg = TwitchMsg.CreateFromJSON(content);
 
@@ -93,20 +106,7 @@ public class TwitchUDPLinker : MonoBehaviour
 
   private void internalHandleMsg(TwitchMsg msg)
   {
-    if (((internalMsgGame!=null) && (internalMsgGame.gameObject == msgHandler)) ||
-       ((internalMsgLobby != null) && (internalMsgLobby.gameObject == msgHandler)))
-    {
-      // All okay?? What fucking horror is this code
-    } else
-    {
-      internalMsgGame = msgHandler.GetComponent<TwitchGame>();
-      internalMsgLobby = msgHandler.GetComponent<LobbyManager>();
-    }
-
-    if (internalMsgGame)
-      internalMsgGame.handleMsg(msg);
-    if (internalMsgLobby)
-      internalMsgLobby.handleMsg(msg);
+    msgHandlerDel(msg);
   }
 
   List<TwitchMsg> fakePlayers = new List<TwitchMsg>();
@@ -126,6 +126,8 @@ public class TwitchUDPLinker : MonoBehaviour
       msg.msg.userid = "_" + newfakenick;
       msg.msg.nick = newfakenick;
       msg.msg.content = "!join";
+      msg.msg.bits = 0;
+      msg.msg.badge = "";
       fakePlayers.Add(msg);
 
       internalHandleMsg(msg);

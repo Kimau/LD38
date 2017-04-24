@@ -10,6 +10,7 @@ public class TwitchGame : MonoBehaviour
   public KillAnimEnd markerPrefab;
   public KillAnimEnd ping;
   public KillAnimEnd ping3;
+  public KillAnimEnd labelMurderStart;
   public MapTerrain gameMap;
   const int maxPlayerCount = 256;
 
@@ -19,85 +20,122 @@ public class TwitchGame : MonoBehaviour
 
   int currPlayerCount = 0;
   GamePlayer[] m_players = new GamePlayer[maxPlayerCount];
+  bool gameIsPlaying = false;
+
+  GridOverlayMap gridOverlay;
 
   // Use this for initialization
   void Start()
   {
+    if(TwitchUDPLinker.Sub(handleMsg) == false)
+    {
+      // Standalone Test
+      debugStandaloneTest();
+    }
 
     transform.localScale = new Vector3(20.0f / gameMap.width, 20.0f / gameMap.width, 20.0f / gameMap.width);
 
-    // New Game Logic
-    currPlayerCount = 0;
+    // Setup Grid
+    gridOverlay = GetComponentInChildren<GridOverlayMap>();
+    gridOverlay.gameObject.SetActive(false);
+    StartCoroutine(gridOverlay.SetupGrid(gameMap));
+  }
+
+  void debugStandaloneTest()
+  {
+    string[] newfakenick = { "botty", "kimbot", "fakeme", "purplepants", "sillyputty" };
+    foreach (var item in newfakenick)
+    {
+      GamePlayer gp = ScriptableObject.CreateInstance<GamePlayer>();
+      gp.nick = item;
+      gp.userid = "_" + item;
+      gp.col = Random.ColorHSV(0, 1, 0.5f, 1, 0.5f, 1);
+      PlayerJoin(gp);
+    }
+
+    GameStart();
   }
 
   // Update is called once per frame
   void Update()
   {
-    float dt = Time.deltaTime * gameSpeed;
+    float dt = 0; 
 
-    // Move Players
-    for (int i = 0; i < currPlayerCount; ++i)
+    // Game is Playing
+    if(gameIsPlaying)
     {
-      var p = m_players[i];
-      if (p == null)
-      {
-        Debug.LogError("Player " + i + "is null");
-        continue;
-      }
+      dt = Time.deltaTime * gameSpeed; 
 
-      // Aim at point
-      if (p.tarPos.x > 0)
+      // Update Players
+      for (int i = 0; i < currPlayerCount; ++i)
       {
-        p.travelDir = p.tarPos - p.mapPos;
-
-        if (p.travelDir.sqrMagnitude < 0.8)
+        var p = m_players[i];
+        if (p == null)
         {
-          Debug.Log("Reached Target " + p.tarPos);
-          p.travelDir = Vector2.zero;
-          p.tarPos.x = -1;
-          if ((p.doingWhat == PlayerDoing.Walking) || (p.doingWhat == PlayerDoing.Running))
+          Debug.LogError("Player " + i + "is null");
+          continue;
+        }
+
+        UpdatePlayer(dt, p);
+      }
+    }
+  }
+
+  private void UpdatePlayer(float dt, GamePlayer p)
+  {
+
+    // Aim at point
+    if (p.tarPos.x > 0)
+    {
+      p.travelDir = p.tarPos - p.mapPos;
+
+      if (p.travelDir.sqrMagnitude < 0.8)
+      {
+        Debug.Log("Reached Target " + p.tarPos);
+        p.travelDir = Vector2.zero;
+        p.tarPos.x = -1;
+        if ((p.doingWhat == PlayerDoing.Walking) || (p.doingWhat == PlayerDoing.Running))
+        {
+          p.doingWhat = PlayerDoing.Standing;
+        }
+      }
+      else
+      {
+        p.travelDir.Normalize();
+      }
+    }
+
+    // Diffrent Actions
+    switch (p.doingWhat)
+    {
+      case PlayerDoing.Dead:
+        break;
+
+      case PlayerDoing.Cover:
+        break;
+
+      case PlayerDoing.Standing:
+        break;
+
+      case PlayerDoing.Walking:
+        {
+          float travelDist = dt * walkSpeed;
+          for (float f = 0; f < travelDist; f += 1.0f)
           {
-            p.doingWhat = PlayerDoing.Standing;
+            travelDist = stepMovePlayer(p, travelDist);
           }
         }
-        else
+        break;
+
+      case PlayerDoing.Running:
         {
-          p.travelDir.Normalize();
+          float travelDist = dt * runSpeed;
+          for (float f = 0; f < travelDist; f += 1.0f)
+          {
+            travelDist = stepMovePlayer(p, travelDist);
+          }
         }
-      }
-
-      // Diffrent Actions
-      switch (p.doingWhat)
-      {
-        case PlayerDoing.Dead:
-          break;
-
-        case PlayerDoing.Cover:
-          break;
-
-        case PlayerDoing.Standing:
-          break;
-
-        case PlayerDoing.Walking:
-          {
-            float travelDist = dt * walkSpeed;
-            for (float f = 0; f < travelDist; f += 1.0f)
-            {
-              travelDist = stepMovePlayer(p, travelDist);
-            }
-          }
-          break;
-
-        case PlayerDoing.Running:
-          {
-            float travelDist = dt * runSpeed;
-            for (float f = 0; f < travelDist; f += 1.0f)
-            {
-              travelDist = stepMovePlayer(p, travelDist);
-            }
-          }
-          break;
-      }
+        break;
     }
   }
 
@@ -154,39 +192,50 @@ public class TwitchGame : MonoBehaviour
     {
       miniMap.targetPlayer = p;
 
-      // Do Stuff for Player
+      if (!gameIsPlaying)
+      {
+        // Waiting Commands
 
-      // --------------- MOVEMENT -----------------------
-      if (msg.msg.content.Contains("!goto"))  // Movement Command
-      {
-        PlayerGoto(p, msg.msg.content);
-      }
-      else if (msg.msg.content.Contains("!move"))  // Movement Command
-      {
-        PlayerMove(p, msg.msg.content);
-      }
-      else if (msg.msg.content.Contains("!walk"))  // Movement Command
-      {
-        p.doingWhat = PlayerDoing.Walking;
-      }
-      else if (msg.msg.content.Contains("!run"))  // Movement Command
-      {
-        p.doingWhat = PlayerDoing.Running;
-      }
-      // --------------- ATTACK-----------------------
-      else if (msg.msg.content.Contains("!attack"))  // Movement Command
-      {
-        PlayerAttack(p, msg.msg.content);
-      }
-      // 
-      else if (msg.msg.content.Contains("!stop")) // Stop Commmand
-      {
-        PlayerStop(p);
-      }
-      //
-      else
-      {
-        TwitchUDPLinker.Say("Commands ❕: goto, move, walk, run, attack, stop");
+      } else   {
+        if(p.doingWhat == PlayerDoing.Dead)
+        {
+          // Player Dead
+          TwitchUDPLinker.Say("You Ded you do nothing");
+          return;
+        }
+
+        // --------------- MOVEMENT -----------------------
+        if (msg.msg.content.Contains("!goto"))  // Movement Command
+        {
+          PlayerGoto(p, msg.msg.content);
+        }
+        else if (msg.msg.content.Contains("!move"))  // Movement Command
+        {
+          PlayerMove(p, msg.msg.content);
+        }
+        else if (msg.msg.content.Contains("!walk"))  // Movement Command
+        {
+          p.doingWhat = PlayerDoing.Walking;
+        }
+        else if (msg.msg.content.Contains("!run"))  // Movement Command
+        {
+          p.doingWhat = PlayerDoing.Running;
+        }
+        // --------------- ATTACK-----------------------
+        else if (msg.msg.content.Contains("!attack"))  // Movement Command
+        {
+          PlayerAttack(p, msg.msg.content);
+        }
+        // 
+        else if (msg.msg.content.Contains("!stop")) // Stop Commmand
+        {
+          PlayerStop(p);
+        }
+        //
+        else
+        {
+          TwitchUDPLinker.Say("Commands ❕: goto, move, walk, run, attack, stop");
+        }
       }
     }
 
@@ -212,18 +261,55 @@ public class TwitchGame : MonoBehaviour
     p.transform.localPosition = new Vector3(pos.x, 0, pos.y);
   }
 
+  
+  public void GameStart()
+  {
+    gameIsPlaying = true;
+
+    StartCoroutine(GameSlowStart());
+  }
+
+  IEnumerator GameSlowStart()
+  {
+    
+    // Add One Player per Second
+    for (int i=0; i<currPlayerCount; ++i)
+    {
+      AddPlayerToMap(m_players[i]);
+      yield return new WaitForSeconds(1.0f);
+    }
+
+    // Show Grid
+    gridOverlay.gameObject.SetActive(true);
+    yield return StartCoroutine(gridOverlay.AnimateSquaresAtStartOfGame());
+
+    // Start Camera Murder Message
+    Instantiate(labelMurderStart, Camera.main.transform);
+    yield return new WaitForSeconds(2.5f);
+
+    // Hide One Box at a time
+    Debug.Log("Slow Start Done");
+  }
 
   //---------------------------------------------------------------------------------
   // Player Functions
-  void PlayerJoin(GamePlayer p)
+  public void PlayerJoin(GamePlayer p)
   {
+    m_players[currPlayerCount++] = p;
+  }
+
+  void AddPlayerToMap(GamePlayer p)
+  {
+    // Initial State
     p.doingWhat = PlayerDoing.Standing;
     p.mapPos = gameMap.GetRandomMapSpawn();
     p.tarPos.x = -1.0f;
 
+    // Add to Mapp
     var newPlayer = Instantiate(templatePlayer, transform);
     newPlayer.GetComponent<PlayerGO>().SetPlayerData(ref p);
 
+    // Highlight
     PingAt(p.mapPos);
     miniMap.targetPlayer = p;
   }
