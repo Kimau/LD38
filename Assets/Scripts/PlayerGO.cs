@@ -45,7 +45,7 @@ public class PlayerGO : MonoBehaviour
     // Always Upside
     if (nameTag)
     {
-      nameTag.transform.position = transform.position + new Vector3(0, 0.1f + randomBias, 0.5f);
+      nameTag.transform.position = transform.position + Camera.main.transform.up * (randomBias + 0.5f);
       nameTag.transform.rotation = Quaternion.LookRotation(Camera.main.transform.forward, Camera.main.transform.up);
     }
 

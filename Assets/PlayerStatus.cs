@@ -52,6 +52,7 @@ public class PlayerStatus : MonoBehaviour {
   {
     player = p;
 
+    nameLabel.color = player.col;
     nameLabel.SetText(player.nick);
     scoreLabel.SetText(player.score + "");
 

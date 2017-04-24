@@ -15,6 +15,7 @@ public class TwitchGame : MonoBehaviour
   public MapTerrain gameMap;
   public PlayerStatus srcStatus;
   public GameObject deathKnell;
+  public GameObject emptyAttack;
   const int maxPlayerCount = 256;
 
   public int walkSpeed = 5;
@@ -24,6 +25,8 @@ public class TwitchGame : MonoBehaviour
   public float maxTimeTillDeathSquare = 90.0f;
   public float warningTillDeath = 60.0f;
   public float TimeTillPlayerExplodes = 30.0f;
+
+  public Weapon[] WeaponList;
 
   float timeTillDeathSquare = -100000.0f;
   List<int> listOfDeathSquares = new List<int>();
@@ -56,8 +59,10 @@ public class TwitchGame : MonoBehaviour
     StartCoroutine(gridOverlay.SetupGrid(gameMap));
   }
 
+  bool isDebugStandalone = false;
   void debugStandaloneTest()
   {
+    isDebugStandalone = true;
     string[] newfakenick = { "botty", "kimbot", "fakeme", "purplepants", "sillyputty" };
     foreach (var item in newfakenick)
     {
@@ -81,6 +86,9 @@ public class TwitchGame : MonoBehaviour
     {
       dt = Time.deltaTime * gameSpeed;
 
+      if (combatActive)
+        return;
+
       // Update Death Square 
       UpdateDeathSquares(dt);
 
@@ -94,12 +102,10 @@ public class TwitchGame : MonoBehaviour
           continue;
         }
 
-        if (p.doingWhat == PlayerDoing.Dead)
-          return;
-
         UpdatePlayer(dt, p);
 
-        if (!gameIsPlaying)
+        // Skip Out everything else is paused
+        if (!gameIsPlaying || combatActive)
           return;
       }
     }
@@ -278,6 +284,9 @@ public class TwitchGame : MonoBehaviour
   // Player Stuff
   private void UpdatePlayer(float dt, GamePlayer p)
   {
+    if (p.doingWhat == PlayerDoing.Dead)
+      return;
+
     // Am I in a death Square
     int gridX, gridY;
     int gridVal = gameMap.GetGridPoint(p.mapPos, out gridX, out gridY);
@@ -299,6 +308,12 @@ public class TwitchGame : MonoBehaviour
         else
         {
           p.timeTillExplode -= dt;
+          if (p.timeTillExplode < 3)
+          {
+            // Move Camera Close
+            PlayerCloseup(playerGameObjs.Find(x => x.playerData == p), 4.5f);
+          }
+
           if (p.timeTillExplode < 0)
           {
             // TODO :: KABOOOM
@@ -327,6 +342,20 @@ public class TwitchGame : MonoBehaviour
       else
       {
         p.travelDir.Normalize();
+      }
+    }
+
+    // Reloading
+    if (p.reloadTime > 0)
+    {
+      switch (p.doingWhat)
+      {
+        case PlayerDoing.Dead: break;
+        case PlayerDoing.Cover: p.reloadTime -= dt * 0.9f; break;
+        case PlayerDoing.Standing: p.reloadTime -= dt; break;
+        case PlayerDoing.Walking: p.reloadTime -= dt * 0.5f; break;
+        case PlayerDoing.Running: break;
+        case PlayerDoing.Attacking: p.reloadTime -= dt * 1.2f; break;
       }
     }
 
@@ -361,7 +390,118 @@ public class TwitchGame : MonoBehaviour
           }
         }
         break;
+
+      case PlayerDoing.Attacking:
+        if (p.reloadTime > 0.0f)
+          return;
+
+        // Is anyone in the square with me
+        var PlayersInGrid = playerList.FindAll(x => IsInGrid(x.mapPos, gridX, gridY));
+        if (PlayersInGrid.Count == 1)
+        {
+          // You done leeroyed
+          var attack = Instantiate(emptyAttack, transform);
+          var pObj = playerGameObjs.Find(x => x.playerData == p);
+          attack.transform.position = pObj.transform.position;
+          StartCoroutine(KillObject(attack.gameObject, 2.0f));
+          p.reloadTime = p.weapon.reloadTime;
+          p.doingWhat = PlayerDoing.Standing;
+        }
+        else
+        {
+          StartCoroutine(StartCombatRound(PlayersInGrid));
+        }
+        break;
     }
+  }
+
+  bool IsInGrid(Vector2 mapPos, int x, int y)
+  {
+    int sx, sy;
+    gameMap.GetGridPoint(mapPos, out sx, out sy);
+    return ((sx == x) && (sy == y));
+  }
+
+  bool combatActive = false;
+  IEnumerator StartCombatRound(List<GamePlayer> fighters)
+  {
+    if (combatActive)
+      yield break;
+
+    combatActive = true;
+
+    // Get Camera into Position
+    var origPos = GameObject.FindGameObjectWithTag("CamDefaultPos");
+    Vector2 avgPos = fighters[0].mapPos;
+    for (int i = 1; i < fighters.Count; i++)
+      avgPos += fighters[1].mapPos;
+    avgPos = avgPos / fighters.Count;
+
+    Vector3 realAvgPos = transform.TransformPoint(avgPos.x, 0, avgPos.y);
+    Vector2 randPos = Random.insideUnitCircle*1.5f;
+    Vector3 tarPos  = transform.TransformPoint(avgPos.x + randPos.x*gameMap.subWidth, 0, avgPos.y - gameMap.subHeight) + transform.up * 1.0f;
+    yield return StartCoroutine(CameraOrbitRoutine(0.4f, tarPos, realAvgPos, transform.up));
+
+    // 
+    playerGameObjs.ForEach(px => px.nameTag.gameObject.SetActive(false));
+    yield return new WaitForSeconds(3.0f);
+
+    playerGameObjs.ForEach(px => px.nameTag.gameObject.SetActive(true));
+
+    // Return Camera    
+    yield return StartCoroutine(CameraSmoothRoutine(0.4f, origPos.transform.position, origPos.transform.rotation));
+
+    combatActive = false;
+  }
+
+  bool cameraMoving = false;
+  IEnumerator CameraSmoothRoutine(float fxTime, Vector3 tPos, Quaternion tRot)
+  {
+    if (cameraMoving)
+      yield break;
+
+    cameraMoving = true;
+    Vector3 oldPos = Camera.main.transform.position;
+    Quaternion oldRot = Camera.main.transform.rotation;
+
+    for (float f = 0; f < fxTime; f += Time.deltaTime)
+    {
+      Camera.main.transform.position = Vector3.Lerp(oldPos, tPos, f / fxTime);
+      Camera.main.transform.rotation = Quaternion.Lerp(oldRot, tRot, f / fxTime);
+      yield return new WaitForEndOfFrame();
+    }
+
+    Camera.main.transform.position = tPos;
+    Camera.main.transform.rotation = tRot;
+    cameraMoving = false;
+  }
+
+  IEnumerator CameraOrbitAndBackRoutine(float fxTimeTo, float fxTimeWatch, float fxTimeBack, Vector3 tPos, Vector3 focusPt, Vector3 upVec)
+  {
+    yield return StartCoroutine(CameraOrbitRoutine(fxTimeTo, tPos, focusPt, upVec));
+    yield return new WaitForSecondsRealtime(fxTimeWatch);
+    var origPos = GameObject.FindGameObjectWithTag("CamDefaultPos");
+    yield return StartCoroutine(CameraSmoothRoutine(fxTimeBack, origPos.transform.position, origPos.transform.rotation));
+  }
+
+  IEnumerator CameraOrbitRoutine(float fxTime, Vector3 tPos, Vector3 focusPt, Vector3 upVec)
+  {
+    if (cameraMoving)
+      yield break;
+
+    cameraMoving = true;
+    Vector3 oldPos = Camera.main.transform.position;
+
+    for (float f = 0; f < fxTime; f += Time.deltaTime)
+    {
+      Camera.main.transform.position = Vector3.Lerp(oldPos, tPos, f / fxTime);
+      Camera.main.transform.rotation = Quaternion.LookRotation(focusPt - Camera.main.transform.position, upVec);
+      yield return new WaitForEndOfFrame();
+    }
+
+    Camera.main.transform.position = tPos;
+    Camera.main.transform.rotation = Quaternion.LookRotation(focusPt - Camera.main.transform.position, upVec);
+    cameraMoving = false;
   }
 
   IEnumerator KillObject(GameObject obj, float seconds)
@@ -378,8 +518,7 @@ public class TwitchGame : MonoBehaviour
     var blood = Instantiate(deathKnell, transform);
     var pObj = playerGameObjs.Find(x => x.playerData == p);
     blood.transform.position = pObj.transform.position;
-    KillObject(blood.gameObject, 2.0f);
-
+    StartCoroutine(KillObject(blood.gameObject, 2.0f));
 
     // Check for End of Game
     var AlivePlayers = playerList.FindAll(x => x.health > 0);
@@ -418,6 +557,22 @@ public class TwitchGame : MonoBehaviour
     return playerList.Find(x => x.userid == twitchID);
   }
 
+  string adminMsg = "";
+  void OnGUI()
+  {
+    if (!isDebugStandalone)
+      return;
+
+    // Make a background box
+    int y = 400;
+    GUI.Box(new Rect(10, y, 100, 110), "Fake Message"); y += 25;
+    adminMsg = GUI.TextField(new Rect(10, y, 100, 20), adminMsg); y += 25;
+    if (GUI.Button(new Rect(20, y, 80, 20), "Send"))
+    {
+      handleAdminMsg(adminMsg);
+    }
+  }
+
   public void handleMsg(TwitchMsg msg)
   {
     if (msg.cat != 35)
@@ -429,6 +584,15 @@ public class TwitchGame : MonoBehaviour
     if (msg.msg.content.Contains("!") == false)
     {
       return;
+    }
+
+    var cmdStr = msg.msg.content.ToLower();
+
+    // Admin Commands
+    if (msg.msg.badge.Contains("C"))
+    {
+      if (handleAdminMsg(cmdStr))
+        return;
     }
 
     var p = GetPlayer(msg.msg.userid);
@@ -451,29 +615,29 @@ public class TwitchGame : MonoBehaviour
         }
 
         // --------------- MOVEMENT -----------------------
-        if (msg.msg.content.Contains("!goto"))  // Movement Command
+        if (cmdStr.Contains("!goto"))  // Movement Command
         {
           PlayerGoto(p, msg.msg.content);
         }
-        else if (msg.msg.content.Contains("!move"))  // Movement Command
+        else if (cmdStr.Contains("!move"))  // Movement Command
         {
           PlayerMove(p, msg.msg.content);
         }
-        else if (msg.msg.content.Contains("!walk"))  // Movement Command
+        else if (cmdStr.Contains("!walk"))  // Movement Command
         {
           p.doingWhat = PlayerDoing.Walking;
         }
-        else if (msg.msg.content.Contains("!run"))  // Movement Command
+        else if (cmdStr.Contains("!run"))  // Movement Command
         {
           p.doingWhat = PlayerDoing.Running;
         }
         // --------------- ATTACK-----------------------
-        else if (msg.msg.content.Contains("!attack"))  // Movement Command
+        else if (cmdStr.Contains("!attack"))  // Movement Command
         {
-          PlayerAttack(p, msg.msg.content);
+          p.doingWhat = PlayerDoing.Attacking;
         }
         // 
-        else if (msg.msg.content.Contains("!stop")) // Stop Commmand
+        else if (cmdStr.Contains("!stop")) // Stop Commmand
         {
           PlayerStop(p);
         }
@@ -484,7 +648,85 @@ public class TwitchGame : MonoBehaviour
         }
       }
     }
+  }
 
+  private bool handleAdminMsg(string cmdStr)
+  {
+    bool hasAdminSpoke = true;
+    if (cmdStr.Contains("!fastsquare"))
+    {
+      if (timeTillDeathSquare > 0)
+        timeTillDeathSquare = 0.01f;
+      else if (timeTillDeathSquare > -warningTillDeath)
+        timeTillDeathSquare = -warningTillDeath + 0.01f;
+    }
+    else if (cmdStr.Contains("!forcebrawl"))
+    {
+      playerList.ForEach(p =>
+      {
+        if (p.doingWhat != PlayerDoing.Dead)
+          p.doingWhat = PlayerDoing.Attacking;
+      });
+    }
+    else if (cmdStr.Contains("!tp"))
+    {
+      AdminTeleport(cmdStr);
+    }
+    else if (cmdStr.Contains("!closeup"))
+    {
+      CloseUp(cmdStr);
+    }
+    else
+      hasAdminSpoke = false;
+    return hasAdminSpoke;
+  }
+
+  void AdminTeleport(string cmdStr)
+  {
+    var m = Regex.Match(cmdStr, "!tp ([0-9\\.a-z]+) ([0-9]+) ([0-9]+)");
+    if (!m.Success)
+    {
+      // Teleport everyone to 4,4
+      playerList.ForEach(x => x.mapPos =
+      new Vector2(x.mapPos.x % gameMap.subWidth,
+                  x.mapPos.y % gameMap.subHeight) +
+      new Vector2(4 * gameMap.subWidth,
+                  4 * gameMap.subHeight));
+      return;
+    }
+
+    var p = playerList.Find(x => x.nick == m.Groups[1].Value);
+    if (p == null)
+    {
+      Debug.Log("Cannot Find: " + m.Groups[1].Value);
+      return;
+    }
+
+    p.mapPos =
+      new Vector2(p.mapPos.x % gameMap.subWidth,
+                  p.mapPos.y % gameMap.subHeight) +
+      new Vector2(int.Parse(m.Groups[2].Value) * gameMap.subWidth,
+                  int.Parse(m.Groups[3].Value) * gameMap.subHeight);
+  }
+
+  void CloseUp(string cmdStr)
+  {
+    string tarNick = cmdStr.Substring(cmdStr.IndexOf("!closeup") + "!closeup".Length).Trim();
+    if (tarNick.Length < 1)
+      return;
+
+    PlayerCloseup(playerGameObjs.Find(x => x.playerData.nick == tarNick), 5.0f);
+  }
+
+  void PlayerCloseup(PlayerGO gObj, float timeForCloseup)
+  {
+    if (gObj == null)
+      return;
+
+    Vector3 dirToCenter = transform.TransformPoint(new Vector3(gameMap.width * 0.5f, gameMap.width * 0.5f, gameMap.height * 0.5f)) - gObj.transform.position;
+    dirToCenter.y = 0;
+    Vector3 newPos = gObj.transform.position - dirToCenter.normalized * 3.7f + transform.up * 2.0f;
+    StartCoroutine(CameraOrbitAndBackRoutine(0.5f, timeForCloseup, 0.3f, newPos, gObj.transform.position, transform.up));
   }
 
   void MarkerAt(Vector2 pos, Color32 col)
@@ -573,7 +815,7 @@ public class TwitchGame : MonoBehaviour
   // Player Functions
   public void PlayerJoin(GamePlayer p)
   {
-    const float stupidYhacknumberforstatus = -0.26f;
+    const float stupidYhacknumberforstatus = -0.16f;
 
     // Setup Status Bar
     var newStatus = Instantiate(srcStatus, srcStatus.transform.parent);
@@ -601,6 +843,7 @@ public class TwitchGame : MonoBehaviour
     p.tarPos.x = -1.0f;
     p.health = GamePlayer.maxHealth;
     p.timeTillExplode = -1.0f;
+    p.weapon = WeaponList[0];
 
     // Add to Mapp
     var newPlayer = Instantiate(templatePlayer, transform);
@@ -624,7 +867,7 @@ public class TwitchGame : MonoBehaviour
 
     msgCmd = msgCmd.ToLower();
 
-    var m = Regex.Match(msgCmd, "!move ([0-9]*)");
+    var m = Regex.Match(msgCmd, "!move ([0-9]+)");
     if (!m.Success)
     {
       Debug.Log("Move Command Failed: " + msgCmd);
@@ -644,7 +887,7 @@ public class TwitchGame : MonoBehaviour
 
     msgCmd = msgCmd.ToLower();
 
-    var m = Regex.Match(msgCmd, "!goto ([0-9\\.]*) ([0-9\\.]*)");
+    var m = Regex.Match(msgCmd, "!goto ([0-9\\.]+) ([0-9\\.]+)");
     if (!m.Success)
     {
       Debug.Log("Move Command Failed: " + msgCmd);
@@ -655,12 +898,6 @@ public class TwitchGame : MonoBehaviour
     p.tarPos = gameMap.ConvertGridPointToMapPoint(tarPos);
 
     MarkerAt(p.tarPos, p.col);
-  }
-
-  void PlayerAttack(GamePlayer p, string msgCmd)
-  {
-    msgCmd = msgCmd.ToLower();
-
   }
 
   void PlayerStop(GamePlayer p)

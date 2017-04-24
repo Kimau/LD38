@@ -57,11 +57,13 @@ public class LobbyManager : MonoBehaviour
       return;
     }
 
+    var cmdStr = msg.msg.content.ToLower();
+
     // Admin Commands
     if (msg.msg.badge.Contains("C"))
     {
       bool hasAdminSpoke = true;
-      if (msg.msg.content.Contains("!skipcount"))
+      if (cmdStr.Contains("!skipcount"))
         AdminSkipCount();
       else
         hasAdminSpoke = false;
@@ -74,14 +76,14 @@ public class LobbyManager : MonoBehaviour
     var p = GetPlayer(msg.msg.userid);
     if (p != null)
     {
-      if (msg.msg.content.Contains("!quit"))
+      if (cmdStr.Contains("!quit"))
         PlayerQuit(p);
 
       return;
     }
 
     // Viewer Commands
-    if (msg.msg.content.Contains("!join"))
+    if (cmdStr.Contains("!join"))
       PlayerJoin(msg.msg.userid, msg.msg.nick);
 
     //TwitchUDPLinker.Say("Please ❕join to play");

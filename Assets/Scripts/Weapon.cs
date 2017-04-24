@@ -9,6 +9,7 @@ public class Weapon : ScriptableObject
   public int maxDmg;
 
   public int range; // In Tiles
+  public float reloadTime;
 
   public Texture2D weaponIcon;
 

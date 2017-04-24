@@ -7,7 +7,8 @@ public enum PlayerDoing
   Cover,
   Standing,
   Walking,
-  Running
+  Running,
+  Attacking
 };
 
 [System.Serializable]
@@ -29,6 +30,7 @@ public class GamePlayer : ScriptableObject
   public int health;
   public int score = 0;
   public float timeTillExplode = -1.0f;
+  public float reloadTime = 0.0f;
 
   public GamePlayer()
   {
