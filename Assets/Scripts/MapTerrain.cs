@@ -7,6 +7,13 @@ using UnityEngine;
 public class MapTerrain : MonoBehaviour
 {
 
+  public const int Hidden = -1;
+  public const int Normal = 0;
+  public const int Safe = 1;
+  public const int Danger = 2;
+  public const int Kill = 3;
+
+
   public int width = 1024;
   public int height = 1024;
   public int subWidth = 64;
@@ -15,17 +22,13 @@ public class MapTerrain : MonoBehaviour
   public int gridHeight;
 
 
-  // GRID 0 Nothing
-  // GRID 1 Safe
-  // GRID 2 Danger
-  // GRID 3 Kill
-
   public Texture2D m_sourcMap;
   public MapTileType[] m_sourceTileAssets;
 
   // 
-  TileData[] m_tiles;
-  int[] m_gridValues;
+  public TileData[] m_tiles;
+  public int[] m_gridValues;
+
   Color32[] m_colBuffer;
   Texture2D m_surfaceTex;
 
@@ -62,6 +65,22 @@ public class MapTerrain : MonoBehaviour
     return m_tiles[xi + yi * width];
   }
 
+  public int GetGridPoint(Vector2 pos, out int x, out int y)
+  {
+    x = Mathf.FloorToInt(pos.x / subWidth);
+    y = Mathf.FloorToInt(pos.y / subHeight);
+
+    if ((x < 0) || (x >= gridWidth) || (y < 0) || (y >= gridHeight))
+      return -1;
+
+    return m_gridValues[x + y * gridWidth];
+  }
+
+  public Vector2 ConvertGridPointToMapPoint(Vector2 pos)
+  {
+    return new Vector2(pos.x * subWidth, pos.y * subHeight);
+  }
+
   int NearestMapTile(Color32 col)
   {
     int res = -1;
@@ -85,7 +104,6 @@ public class MapTerrain : MonoBehaviour
     return res;
   }
 
-  public int[] GetGridData() { return m_gridValues; }
 
   void SetupGridSquares()
   {
@@ -106,7 +124,7 @@ public class MapTerrain : MonoBehaviour
           }
         }
 
-        m_gridValues[x + y * gridWidth] = (walkable) ? 1 : 3;
+        m_gridValues[x + y * gridWidth] = (walkable) ? MapTerrain.Safe : MapTerrain.Kill;
       }
     }
 

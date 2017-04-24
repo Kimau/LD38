@@ -5,12 +5,12 @@
 	}
 	SubShader
 	{
-		Tags { "RenderType"="Overlay" "RenderType"="Transparent" "IgnoreProjector"="True" }
+		Tags { "Queue"="Transparent" "RenderType"="Transparent" "IgnoreProjector"="True" }
 		LOD 100
 
 		Pass
 		{
-			Blend One OneMinusSrcAlpha
+			Blend SrcAlpha OneMinusSrcAlpha
 
 			CGPROGRAM
 			#pragma vertex vert

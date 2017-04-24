@@ -30,6 +30,7 @@ public class MiniMap : MonoBehaviour
     m_colBuffer = new Color32[width * height];
     m_surfaceTex = new Texture2D(width, height, TextureFormat.ARGB32, false);
     m_surfaceTex.filterMode = FilterMode.Point;
+    m_surfaceTex.wrapMode = TextureWrapMode.Clamp;
 
     m_renderer.material.mainTexture = m_surfaceTex;
 

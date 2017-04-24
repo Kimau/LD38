@@ -145,6 +145,8 @@ public class LobbyManager : MonoBehaviour
     // Handle Countdown Clock
     if ((startClockValue < 0) && (currPlayerCount >= 4))
       StartCoroutine(StartCountdown());
+
+    playerNum.SetText(currPlayerCount + playerText);
   }
 
   IEnumerator StartCountdown()

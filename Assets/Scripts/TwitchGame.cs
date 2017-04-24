@@ -4,36 +4,51 @@ using System.Text.RegularExpressions;
 using UnityEngine;
 
 public class TwitchGame : MonoBehaviour
-{ 
+{
   public GameObject templatePlayer;
   public MiniMap miniMap;
   public KillAnimEnd markerPrefab;
   public KillAnimEnd ping;
   public KillAnimEnd ping3;
   public KillAnimEnd labelMurderStart;
+  public KillAnimEnd labelMurderEnd;
   public MapTerrain gameMap;
+  public PlayerStatus srcStatus;
+  public GameObject deathKnell;
   const int maxPlayerCount = 256;
 
   public int walkSpeed = 5;
   public int runSpeed = 15;
   public float gameSpeed = 1.0f;
+  public float minTimeTillDeathSquare = 30.0f;
+  public float maxTimeTillDeathSquare = 90.0f;
+  public float warningTillDeath = 60.0f;
+  public float TimeTillPlayerExplodes = 30.0f;
 
-  int currPlayerCount = 0;
-  GamePlayer[] m_players = new GamePlayer[maxPlayerCount];
+  float timeTillDeathSquare = -100000.0f;
+  List<int> listOfDeathSquares = new List<int>();
+
+
   bool gameIsPlaying = false;
+  int safeEndSquare;
+  List<PlayerStatus> playerStatusBars = new List<PlayerStatus>();
+  List<GamePlayer> playerList = new List<GamePlayer>();
 
   GridOverlayMap gridOverlay;
 
   // Use this for initialization
   void Start()
   {
-    if(TwitchUDPLinker.Sub(handleMsg) == false)
+    if (TwitchUDPLinker.Sub(handleMsg) == false)
     {
       // Standalone Test
       debugStandaloneTest();
     }
 
     transform.localScale = new Vector3(20.0f / gameMap.width, 20.0f / gameMap.width, 20.0f / gameMap.width);
+
+    // Setup Status
+    srcStatus.gameObject.SetActive(false);
 
     // Setup Grid
     gridOverlay = GetComponentInChildren<GridOverlayMap>();
@@ -59,30 +74,240 @@ public class TwitchGame : MonoBehaviour
   // Update is called once per frame
   void Update()
   {
-    float dt = 0; 
+    float dt = 0;
 
     // Game is Playing
-    if(gameIsPlaying)
+    if (gameIsPlaying)
     {
-      dt = Time.deltaTime * gameSpeed; 
+      dt = Time.deltaTime * gameSpeed;
+
+      // Update Death Square 
+      UpdateDeathSquares(dt);
 
       // Update Players
-      for (int i = 0; i < currPlayerCount; ++i)
+      for (int i = 0; i < playerList.Count; ++i)
       {
-        var p = m_players[i];
+        var p = playerList[i];
         if (p == null)
         {
           Debug.LogError("Player " + i + "is null");
           continue;
         }
 
+        if (p.doingWhat == PlayerDoing.Dead)
+          return;
+
         UpdatePlayer(dt, p);
+
+        if (!gameIsPlaying)
+          return;
       }
     }
   }
 
+  ///////////////////////////////////////////////////////////////////////////
+  // Grid Stuff
+  int GrideScore(int i, int t, bool AddBorder)
+  {
+    int x = (i % gameMap.gridWidth);
+    int y = (i / gameMap.gridWidth);
+
+    int score = 0;
+
+    // Check if all squares around 
+    if (AddBorder)
+    {
+      if (((x - 1) < 0) || (gameMap.m_gridValues[(x - 1) + y * gameMap.gridWidth] == t)) score++;
+      if (((y - 1) < 0) || (gameMap.m_gridValues[x + (y - 1) * gameMap.gridWidth] == t)) score++;
+      if (((x + 1) >= gameMap.gridHeight) || (gameMap.m_gridValues[(x + 1) + y * gameMap.gridWidth] == t)) score++;
+      if (((y + 1) >= gameMap.gridWidth) || (gameMap.m_gridValues[x + (y + 1) * gameMap.gridWidth] == t)) score++;
+    }
+    else
+    {
+      if (((x - 1) >= 0) && (gameMap.m_gridValues[(x - 1) + y * gameMap.gridWidth] == t)) score++;
+      if (((y - 1) >= 0) && (gameMap.m_gridValues[x + (y - 1) * gameMap.gridWidth] == t)) score++;
+      if (((x + 1) < gameMap.gridHeight) && (gameMap.m_gridValues[(x + 1) + y * gameMap.gridWidth] == t)) score++;
+      if (((y + 1) < gameMap.gridWidth) && (gameMap.m_gridValues[x + (y + 1) * gameMap.gridWidth] == t)) score++;
+    }
+
+    return score;
+  }
+
+  bool GrideOppCheck(int i, int t, bool AddBorder)
+  {
+    int x = (i % gameMap.gridWidth);
+    int y = (i / gameMap.gridWidth);
+
+    if (AddBorder)
+    {
+      if ((((x - 1) < 0) || (gameMap.m_gridValues[(x - 1) + y * gameMap.gridWidth] == t)) &&
+          (((x + 1) >= gameMap.gridHeight) || (gameMap.m_gridValues[(x + 1) + y * gameMap.gridWidth] == t)))
+        return true;
+
+      if ((((y - 1) < 0) || (gameMap.m_gridValues[x + (y - 1) * gameMap.gridWidth] == t)) &&
+          (((y + 1) >= gameMap.gridWidth) || (gameMap.m_gridValues[x + (y + 1) * gameMap.gridWidth] == t)))
+        return true;
+    }
+    else
+    {
+      if ((((x - 1) >= 0) && (gameMap.m_gridValues[(x - 1) + y * gameMap.gridWidth] == t)) &&
+         (((x + 1) < gameMap.gridHeight) && (gameMap.m_gridValues[(x + 1) + y * gameMap.gridWidth] == t)))
+        return true;
+
+      if ((((y - 1) >= 0) && (gameMap.m_gridValues[x + (y - 1) * gameMap.gridWidth] == t)) &&
+         (((y + 1) < gameMap.gridWidth) && (gameMap.m_gridValues[x + (y + 1) * gameMap.gridWidth] == t)))
+        return true;
+    }
+
+    return false;
+  }
+
+  void PickNewDeathSquares()
+  {
+    // Choose New Square
+    listOfDeathSquares.Clear();
+
+    List<int> potentialSquares = new List<int>();
+
+    // Get List that are Still Walkable
+    for (int i = 0; i < gameMap.m_gridValues.Length; i++)
+      if (gameMap.m_gridValues[i] == MapTerrain.Safe)
+        potentialSquares.Add(i);
+
+    // Remove Safe Square 
+    potentialSquares.Remove(safeEndSquare);
+
+    int numOpenSquares = potentialSquares.Count;
+    int numSquaresTarget = Mathf.Clamp(numOpenSquares / 3, 1, 3);
+
+    if (potentialSquares.Count == 1)
+    {
+      listOfDeathSquares.Add(potentialSquares[0]);
+      return; // Fuck it no more death squares
+    }
+
+    // Select Surrounded Squares
+    var killSquares = potentialSquares.FindAll(x => GrideScore(x, MapTerrain.Kill, true) >= 3);
+    while (killSquares.Count > 0)
+    {
+      int i = Random.Range(0, killSquares.Count);
+      int gridI = killSquares[i];
+      listOfDeathSquares.Add(gridI);
+      killSquares.Remove(gridI);
+      potentialSquares.Remove(gridI);
+
+      if (listOfDeathSquares.Count >= numSquaresTarget)
+        return; // -------------->>>>>
+    }
+
+    // Select Partial Squares
+    killSquares = potentialSquares.FindAll(x => GrideScore(x, MapTerrain.Kill, true) == 2);
+    killSquares.RemoveAll(x => GrideOppCheck(x, MapTerrain.Kill, true)); // Remove grids that have two oppisite only
+    while (killSquares.Count > 0)
+    {
+      int i = Random.Range(0, killSquares.Count);
+      int gridI = killSquares[i];
+      listOfDeathSquares.Add(gridI);
+      killSquares.Remove(gridI);
+      potentialSquares.Remove(gridI);
+
+      if (listOfDeathSquares.Count >= numSquaresTarget)
+        return; // -------------->>>>>
+    }
+    // Select ones touching and edge
+    killSquares = potentialSquares.FindAll(x => GrideScore(x, MapTerrain.Kill, true) == 1);
+    while (killSquares.Count > 0)
+    {
+      int i = Random.Range(0, killSquares.Count);
+      int gridI = killSquares[i];
+      listOfDeathSquares.Add(gridI);
+      killSquares.Remove(gridI);
+      potentialSquares.Remove(gridI);
+
+      if (listOfDeathSquares.Count >= numSquaresTarget)
+        return; // -------------->>>>>
+    }
+
+    while (potentialSquares.Count > 0)
+    {
+      int i = Random.Range(0, potentialSquares.Count);
+      int gridI = potentialSquares[i];
+      listOfDeathSquares.Add(gridI);
+      potentialSquares.Remove(gridI);
+
+      if (listOfDeathSquares.Count >= numSquaresTarget)
+        return; // -------------->>>>>
+    }
+  }
+
+  void UpdateDeathSquares(float dt)
+  {
+    if (timeTillDeathSquare < -warningTillDeath)
+    {
+      PickNewDeathSquares();
+      timeTillDeathSquare = Random.Range(minTimeTillDeathSquare, maxTimeTillDeathSquare);
+    }
+    else if (timeTillDeathSquare > 0)
+    {
+      timeTillDeathSquare -= dt;
+      if (timeTillDeathSquare < 0)
+      {
+        // Trigger Warning
+        listOfDeathSquares.ForEach(x => gameMap.m_gridValues[x] = 2);
+        if (listOfDeathSquares.Count > 0)
+          gridOverlay.UpdateMesh();
+      }
+    }
+    else if (timeTillDeathSquare > -warningTillDeath)
+    {
+      timeTillDeathSquare -= dt;
+      if (timeTillDeathSquare < -warningTillDeath)
+      {
+        // Make it a Kill Square
+        listOfDeathSquares.ForEach(x => gameMap.m_gridValues[x] = 3);
+        if (listOfDeathSquares.Count > 0)
+          gridOverlay.UpdateMesh();
+
+        PickNewDeathSquares();
+        timeTillDeathSquare = Random.Range(minTimeTillDeathSquare, maxTimeTillDeathSquare);
+      }
+    }
+  }
+
+  ///////////////////////////////////////////////////////////////////////////////////
+  // Player Stuff
   private void UpdatePlayer(float dt, GamePlayer p)
   {
+    // Am I in a death Square
+    int gridX, gridY;
+    int gridVal = gameMap.GetGridPoint(p.mapPos, out gridX, out gridY);
+    switch (gridVal)
+    {
+      case MapTerrain.Normal:
+        break;
+      case MapTerrain.Safe:
+        break;
+      case MapTerrain.Danger:
+        break;
+      case MapTerrain.Kill:
+        if (p.timeTillExplode < 0)
+        {
+          // Start Counter
+          p.timeTillExplode = TimeTillPlayerExplodes;
+          // TwitchUDPLinker.Say("@" + p.nick + " your going to explode");
+        }
+        else
+        {
+          p.timeTillExplode -= dt;
+          if (p.timeTillExplode < 0)
+          {
+            // TODO :: KABOOOM
+            KillPlayer(p);
+            return;
+          }
+        }
+        break;
+    }
 
     // Aim at point
     if (p.tarPos.x > 0)
@@ -139,6 +364,34 @@ public class TwitchGame : MonoBehaviour
     }
   }
 
+  IEnumerator KillObject(GameObject obj, float seconds)
+  {
+    yield return new WaitForSecondsRealtime(seconds);
+    Destroy(obj);
+  }
+
+  private void KillPlayer(GamePlayer p)
+  {
+    p.health = 0;
+    p.doingWhat = PlayerDoing.Dead;
+
+    var blood = Instantiate(deathKnell, transform);
+    var pObj = playerGameObjs.Find(x => x.playerData == p);
+    blood.transform.position = pObj.transform.position;
+    KillObject(blood.gameObject, 2.0f);
+
+
+    // Check for End of Game
+    var AlivePlayers = playerList.FindAll(x => x.health > 0);
+    if (AlivePlayers.Count > 1)
+      return;
+
+    // GAME END
+    gameIsPlaying = false;
+    StartCoroutine(SlowGameEnd(AlivePlayers[0]));
+  }
+
+
   private float stepMovePlayer(GamePlayer p, float travelDist)
   {
     TileData mt = gameMap.GetMapTile(p.mapPos);
@@ -162,16 +415,7 @@ public class TwitchGame : MonoBehaviour
 
   public GamePlayer GetPlayer(string twitchID)
   {
-    for (int i = 0; i < currPlayerCount; ++i)
-    {
-      var p = m_players[i];
-      if (p.userid == twitchID)
-      {
-        return p;
-      }
-    }
-
-    return null;
+    return playerList.Find(x => x.userid == twitchID);
   }
 
   public void handleMsg(TwitchMsg msg)
@@ -196,8 +440,10 @@ public class TwitchGame : MonoBehaviour
       {
         // Waiting Commands
 
-      } else   {
-        if(p.doingWhat == PlayerDoing.Dead)
+      }
+      else
+      {
+        if (p.doingWhat == PlayerDoing.Dead)
         {
           // Player Dead
           TwitchUDPLinker.Say("You Ded you do nothing");
@@ -261,21 +507,20 @@ public class TwitchGame : MonoBehaviour
     p.transform.localPosition = new Vector3(pos.x, 0, pos.y);
   }
 
-  
+  //--------------------------------------------------------------------------------------------
   public void GameStart()
   {
-    gameIsPlaying = true;
-
     StartCoroutine(GameSlowStart());
   }
 
   IEnumerator GameSlowStart()
   {
-    
+    // Setup Players
+
     // Add One Player per Second
-    for (int i=0; i<currPlayerCount; ++i)
+    for (int i = 0; i < playerList.Count; ++i)
     {
-      AddPlayerToMap(m_players[i]);
+      AddPlayerToMap(playerList[i]);
       yield return new WaitForSeconds(1.0f);
     }
 
@@ -283,34 +528,92 @@ public class TwitchGame : MonoBehaviour
     gridOverlay.gameObject.SetActive(true);
     yield return StartCoroutine(gridOverlay.AnimateSquaresAtStartOfGame());
 
+    playerStatusBars.ForEach(x => x.gameObject.SetActive(false));
+
     // Start Camera Murder Message
     Instantiate(labelMurderStart, Camera.main.transform);
     yield return new WaitForSeconds(2.5f);
 
+    playerStatusBars.ForEach(x => x.gameObject.SetActive(true));
+
+
+    // Pick Safe Square 
+    List<int> potentialSquares = new List<int>();
+    for (int i = 0; i < gameMap.m_gridValues.Length; i++)
+      if (gameMap.m_gridValues[i] == MapTerrain.Safe)
+        potentialSquares.Add(i);
+    safeEndSquare = potentialSquares[Random.Range(0, potentialSquares.Count)];
+
     // Hide One Box at a time
     Debug.Log("Slow Start Done");
+    gameIsPlaying = true;
+  }
+
+  IEnumerator SlowGameEnd(GamePlayer winner)
+  {
+
+    var lobbyLoad = SceneLoader.LoadLobbyAsync();
+    lobbyLoad.allowSceneActivation = false;
+
+    // Start Camera Murder Message
+    var endMsg = Instantiate(labelMurderEnd, Camera.main.transform);
+    endMsg.GetComponentInChildren<TMPro.TextMeshPro>().SetText(winner.nick);
+    yield return new WaitForSeconds(9.5f);
+
+    while (lobbyLoad.isDone == false)
+    {
+      lobbyLoad.allowSceneActivation = true;
+      yield return new WaitForSeconds(0.1f);
+    }
+    SceneLoader.MakeLobbyActive();
+
   }
 
   //---------------------------------------------------------------------------------
   // Player Functions
   public void PlayerJoin(GamePlayer p)
   {
-    m_players[currPlayerCount++] = p;
+    const float stupidYhacknumberforstatus = -0.26f;
+
+    // Setup Status Bar
+    var newStatus = Instantiate(srcStatus, srcStatus.transform.parent);
+    var ps = newStatus.GetComponent<PlayerStatus>();
+    ps.SetPlayer(p);
+
+    ps.transform.localPosition = srcStatus.transform.localPosition +
+      new Vector3(0, playerList.Count * stupidYhacknumberforstatus, 0);
+    ps.gameObject.SetActive(false);
+    playerStatusBars.Add(ps);
+
+    // Setup Player Details
+    p.health = GamePlayer.maxHealth;
+
+    // Add to Player List
+    playerList.Add(p);
   }
 
+  List<PlayerGO> playerGameObjs = new List<PlayerGO>();
   void AddPlayerToMap(GamePlayer p)
   {
     // Initial State
     p.doingWhat = PlayerDoing.Standing;
     p.mapPos = gameMap.GetRandomMapSpawn();
     p.tarPos.x = -1.0f;
+    p.health = GamePlayer.maxHealth;
+    p.timeTillExplode = -1.0f;
 
     // Add to Mapp
     var newPlayer = Instantiate(templatePlayer, transform);
-    newPlayer.GetComponent<PlayerGO>().SetPlayerData(ref p);
+    var pGo = newPlayer.GetComponent<PlayerGO>();
+    pGo.SetPlayerData(ref p);
+    playerGameObjs.Add(pGo);
 
     // Highlight
     PingAt(p.mapPos);
+
+    var ps = playerStatusBars.Find(x => x.player == p);
+    ps.gameObject.SetActive(true);
+
     miniMap.targetPlayer = p;
   }
 
@@ -341,19 +644,16 @@ public class TwitchGame : MonoBehaviour
 
     msgCmd = msgCmd.ToLower();
 
-    var m = Regex.Match(msgCmd, "!goto ([0-9]*) ([0-9]*)");
+    var m = Regex.Match(msgCmd, "!goto ([0-9\\.]*) ([0-9\\.]*)");
     if (!m.Success)
     {
       Debug.Log("Move Command Failed: " + msgCmd);
       return;
     }
 
-    int x = int.Parse(m.Groups[1].Value);
-    int y = int.Parse(m.Groups[2].Value);
-    x = Mathf.Clamp(x, 0, gameMap.width - 1);
-    y = Mathf.Clamp(y, 0, gameMap.height - 1);
+    Vector2 tarPos = new Vector2(float.Parse(m.Groups[1].Value), float.Parse(m.Groups[2].Value));
+    p.tarPos = gameMap.ConvertGridPointToMapPoint(tarPos);
 
-    p.tarPos = new Vector2(x, y);
     MarkerAt(p.tarPos, p.col);
   }
 
@@ -367,4 +667,6 @@ public class TwitchGame : MonoBehaviour
   {
     p.doingWhat = PlayerDoing.Cover;
   }
+
+
 }

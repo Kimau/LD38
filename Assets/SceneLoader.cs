@@ -25,7 +25,13 @@ public class SceneLoader : MonoBehaviour {
   public static AsyncOperation LoadGameAsync()
   {
     return SceneManager.LoadSceneAsync(gameBuildIndex, LoadSceneMode.Additive);
-}
+  }
+
+  public static AsyncOperation LoadLobbyAsync()
+  {
+    return SceneManager.LoadSceneAsync(lobbyBuildIndex, LoadSceneMode.Additive);
+  }
+
 
   public static void MakeGameActive()
   {
@@ -34,6 +40,15 @@ public class SceneLoader : MonoBehaviour {
 
     var lobbyScene = SceneManager.GetSceneByBuildIndex(lobbyBuildIndex);
     SceneManager.UnloadSceneAsync(lobbyScene);
+  }
+
+  public static void MakeLobbyActive()
+  {
+    var lobbyScene = SceneManager.GetSceneByBuildIndex(lobbyBuildIndex);
+    SceneManager.SetActiveScene(lobbyScene);
+
+    var gameScene = SceneManager.GetSceneByBuildIndex(gameBuildIndex); 
+    SceneManager.UnloadSceneAsync(gameScene);
   }
 
 }

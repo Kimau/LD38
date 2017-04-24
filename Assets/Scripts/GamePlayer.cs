@@ -24,6 +24,12 @@ public class GamePlayer : ScriptableObject
   public Vector2 mapPos;
   public Vector2 travelDir;
 
+  public Weapon weapon;
+  public const int maxHealth = 100;
+  public int health;
+  public int score = 0;
+  public float timeTillExplode = -1.0f;
+
   public GamePlayer()
   {
     userid = "_notset_";

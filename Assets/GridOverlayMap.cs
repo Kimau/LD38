@@ -38,10 +38,10 @@ public class GridOverlayMap : MonoBehaviour
   public IEnumerator AnimateSquaresAtStartOfGame()
   {
     // Copy 
-    var gdSrc = mapRef.GetGridData();
+    var gdSrc = mapRef.m_gridValues;
     gridOverride = new int[gdSrc.Length];
     for (int i = 0; i < gdSrc.Length; ++i)
-      gridOverride[i] = -1;
+      gridOverride[i] = MapTerrain.Hidden; 
     
 
     UpdateMesh();
@@ -54,7 +54,7 @@ public class GridOverlayMap : MonoBehaviour
       for (int x = 0; x < mapRef.gridWidth; x++)
       {
         int i = x + y * mapRef.gridWidth;
-        gridOverride[i] = 0;
+        gridOverride[i] = MapTerrain.Normal;
         oldPosTrail.Enqueue(i);
 
         // Set Trailing Square to Real Value
@@ -102,7 +102,7 @@ public class GridOverlayMap : MonoBehaviour
       gridSquares.SetData(gridOverride);      
     } else
     {
-      gridSquares.SetData(mapRef.GetGridData());
+      gridSquares.SetData(mapRef.m_gridValues);
     }
     
 
