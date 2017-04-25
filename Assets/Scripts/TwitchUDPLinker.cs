@@ -109,10 +109,14 @@ public class TwitchUDPLinker : MonoBehaviour
     msgHandlerDel(msg);
   }
 
+  public bool debugUI = false;
   List<TwitchMsg> fakePlayers = new List<TwitchMsg>();
   string newfakenick = "nickme";
   void OnGUI()
   {
+    if (!debugUI)
+      return;
+
     // Make a background box
     int y = 400;
     GUI.Box(new Rect(10, y, 100, 110), "Fake Message"); y += 25;

@@ -9,6 +9,7 @@ public class PlayerStatus : MonoBehaviour {
   public TMPro.TextMeshPro scoreLabel;
   public setMatColour healthBar;
   public setMatColour weapon;
+  public setMatColour weaponReload;
 
   // Use this for initialization
   void Start () {
@@ -29,6 +30,19 @@ public class PlayerStatus : MonoBehaviour {
     scoreLabel.SetText(player.score + "");
     SetHealth((float)player.health / (float)GamePlayer.maxHealth);
 
+    if (player.reloadTime > 0)
+    {
+      weaponReload.gameObject.SetActive(true);
+      weaponReload.transform.localScale = Vector3.one * (player.reloadTime / player.weapon.reloadTime);
+      weapon.Color = new Color(0.5f, 0.5f, 0.5f, 1.0f);
+      weapon.UpdateValues();
+    }
+    else if(weaponReload.gameObject.activeSelf)
+    {
+      weaponReload.gameObject.SetActive(false);
+      weapon.Color = new Color(1.0f, 1.0f, 1.0f, 1.0f);
+      weapon.UpdateValues();
+    }
   }
 
   void SetHealth(float healthPercent)

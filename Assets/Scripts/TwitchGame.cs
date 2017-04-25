@@ -18,6 +18,8 @@ public class TwitchGame : MonoBehaviour
   public GameObject emptyAttack;
   const int maxPlayerCount = 256;
 
+  public TMPro.TextMeshPro battleText;
+
   public int walkSpeed = 5;
   public int runSpeed = 15;
   public float gameSpeed = 1.0f;
@@ -259,9 +261,11 @@ public class TwitchGame : MonoBehaviour
       if (timeTillDeathSquare < 0)
       {
         // Trigger Warning
-        listOfDeathSquares.ForEach(x => gameMap.m_gridValues[x] = 2);
         if (listOfDeathSquares.Count > 0)
+        {
+          listOfDeathSquares.ForEach(x => gameMap.m_gridValues[x] = MapTerrain.Danger);
           gridOverlay.UpdateMesh();
+        }
       }
     }
     else if (timeTillDeathSquare > -warningTillDeath)
@@ -270,9 +274,12 @@ public class TwitchGame : MonoBehaviour
       if (timeTillDeathSquare < -warningTillDeath)
       {
         // Make it a Kill Square
-        listOfDeathSquares.ForEach(x => gameMap.m_gridValues[x] = 3);
         if (listOfDeathSquares.Count > 0)
+        {
+          playerList.ForEach(x => x.score += listOfDeathSquares.Count);
+          listOfDeathSquares.ForEach(x => gameMap.m_gridValues[x] = MapTerrain.Kill);
           gridOverlay.UpdateMesh();
+        }
 
         PickNewDeathSquares();
         timeTillDeathSquare = Random.Range(minTimeTillDeathSquare, maxTimeTillDeathSquare);
@@ -346,18 +353,7 @@ public class TwitchGame : MonoBehaviour
     }
 
     // Reloading
-    if (p.reloadTime > 0)
-    {
-      switch (p.doingWhat)
-      {
-        case PlayerDoing.Dead: break;
-        case PlayerDoing.Cover: p.reloadTime -= dt * 0.9f; break;
-        case PlayerDoing.Standing: p.reloadTime -= dt; break;
-        case PlayerDoing.Walking: p.reloadTime -= dt * 0.5f; break;
-        case PlayerDoing.Running: break;
-        case PlayerDoing.Attacking: p.reloadTime -= dt * 1.2f; break;
-      }
-    }
+    ReloadNow(dt, p);
 
     // Diffrent Actions
     switch (p.doingWhat)
@@ -404,7 +400,7 @@ public class TwitchGame : MonoBehaviour
           var pObj = playerGameObjs.Find(x => x.playerData == p);
           attack.transform.position = pObj.transform.position;
           StartCoroutine(KillObject(attack.gameObject, 2.0f));
-          p.reloadTime = p.weapon.reloadTime;
+          p.reloadTime = p.weapon.reloadTime * Random.Range(0.9f,1.1f);
           p.doingWhat = PlayerDoing.Standing;
         }
         else
@@ -412,6 +408,22 @@ public class TwitchGame : MonoBehaviour
           StartCoroutine(StartCombatRound(PlayersInGrid));
         }
         break;
+    }
+  }
+
+  private static void ReloadNow(float dt, GamePlayer p)
+  {
+    if (p.reloadTime > 0)
+    {
+      switch (p.doingWhat)
+      {
+        case PlayerDoing.Dead: break;
+        case PlayerDoing.Cover: p.reloadTime -= dt * 0.9f; break;
+        case PlayerDoing.Standing: p.reloadTime -= dt; break;
+        case PlayerDoing.Walking: p.reloadTime -= dt * 0.5f; break;
+        case PlayerDoing.Running: break;
+        case PlayerDoing.Attacking: p.reloadTime -= dt * 1.2f; break;
+      }
     }
   }
 
@@ -429,6 +441,7 @@ public class TwitchGame : MonoBehaviour
       yield break;
 
     combatActive = true;
+    UpdateStatusBarOwnership(null);
 
     // Get Camera into Position
     var origPos = GameObject.FindGameObjectWithTag("CamDefaultPos");
@@ -443,13 +456,64 @@ public class TwitchGame : MonoBehaviour
     yield return StartCoroutine(CameraOrbitRoutine(0.4f, tarPos, realAvgPos, transform.up));
 
     // 
+    UpdateStatusBarOwnership(fighters);
     playerGameObjs.ForEach(px => px.nameTag.gameObject.SetActive(false));
-    yield return new WaitForSeconds(3.0f);
+    battleText.gameObject.SetActive(true);
+    battleText.SetText("Battle Begins");
+    yield return new WaitForSeconds(0.5f);
 
-    playerGameObjs.ForEach(px => px.nameTag.gameObject.SetActive(true));
+    // Combat Rounds
+    while (fighters.Count > 1)
+    {
+      // Everyone Who can Attack Does
+      for(int i=0; i < fighters.Count; i++)
+      {
+        var p = fighters[i];
+        if((p.doingWhat == PlayerDoing.Attacking) && (p.reloadTime <= 0.0))
+        {
+          // ATTACK
+          int tarI = Random.Range(0, fighters.Count - 1);
+          if (tarI >= i)
+            tarI += 1;
+          var tarP = fighters[tarI];
+
+          int dmg = Random.Range(p.weapon.minDmg, p.weapon.maxDmg);
+          p.reloadTime = p.weapon.reloadTime * Random.Range(0.9f, 1.1f);
+
+          // TODO - Terrain Check
+          // TODO - Range Check
+          // TODO - Status Check
+
+          battleText.SetText(p.nick + " attacks " + tarP.nick + " with " + p.weapon.name + " and deals " + dmg);
+          p.score += dmg*10;
+          tarP.health -= dmg;
+          if(tarP.health <= 0)
+          {
+            KillPlayer(tarP);
+            fighters.Remove(tarP);
+          }
+
+          yield return new WaitForSeconds(1.0f);
+        }
+      }
+
+      // Everyone Reloads
+      fighters.ForEach(x => ReloadNow(0.1f, x));
+
+      // Everyone Switches to Attack Stance if They weren't already
+      fighters.ForEach(x => x.doingWhat = PlayerDoing.Attacking);
+
+      // FUTURE TODO -- Combat commands
+      yield return new WaitForSeconds(0.05f);
+    }
+
+    UpdateStatusBarOwnership(null);
 
     // Return Camera    
     yield return StartCoroutine(CameraSmoothRoutine(0.4f, origPos.transform.position, origPos.transform.rotation));
+
+    playerGameObjs.ForEach(px => px.nameTag.gameObject.SetActive(true));
+    UpdateStatusBarOwnership(playerList);
 
     combatActive = false;
   }
@@ -832,6 +896,26 @@ public class TwitchGame : MonoBehaviour
 
     // Add to Player List
     playerList.Add(p);
+  }
+
+  void UpdateStatusBarOwnership(List<GamePlayer> subList)
+  {
+    int sBar = 0;
+    if (subList != null)
+    {
+      for (int i = 0; i < subList.Count; i++)
+      {
+        var p = subList[i];
+        if (p.doingWhat != PlayerDoing.Dead)
+        {
+          playerStatusBars[sBar].gameObject.SetActive(true);
+          playerStatusBars[sBar++].SetPlayer(p);
+        }
+      }
+    }
+
+    for(;sBar < playerStatusBars.Count; sBar++)
+      playerStatusBars[sBar].gameObject.SetActive(false);
   }
 
   List<PlayerGO> playerGameObjs = new List<PlayerGO>();
